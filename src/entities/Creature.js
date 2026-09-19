@@ -375,14 +375,16 @@ export class Creature {
    * @param {number} time
    */
   updateKinematics(dt, time) {
-    // 1. Smooth orientation facing
+    // 1. Smooth orientation facing (mass-weighted turning inertia)
+    const mass = Math.pow(Math.max(0.6, this.radius / 14), 1.4);
     const speed = this.velocity.magnitude;
     if (speed > 0.05) {
       const targetAngle = this.velocity.heading();
       let diff = targetAngle - this.facingAngle;
       while (diff < -Math.PI) diff += Math.PI * 2;
       while (diff > Math.PI)  diff -= Math.PI * 2;
-      this.facingAngle += diff * Math.min(0.20, 0.055 * (dt / 16));
+      const turnRate = (0.055 / Math.sqrt(mass)) * Math.min(dt / 16, 2.0);
+      this.facingAngle += diff * Math.min(0.25, turnRate);
     }
 
     // 2. Wing & bell oscillations
@@ -439,11 +441,21 @@ export class Creature {
   getBlobPoints(time) {
     this.updateBlob(time);
 
-    // Soft-body jellyfish squash & stretch based on movement velocity
+    // Soft-body jellyfish squash & stretch based on movement velocity and jet pulse
     const speed = this.velocity.magnitude;
     const hasMotion = speed > 0.06;
     const moveAngle = hasMotion ? Math.atan2(this.velocity.y, this.velocity.x) : 0;
-    const stretch = hasMotion ? Math.min(speed * 0.32, 0.42) : 0;
+    
+    // Contraction during jellyfish jet propulsion pulse
+    let jetStretch = 0;
+    if (this.bodyPlan === Config.BODY_PLAN.JELLYFISH) {
+      const bellSine = Math.sin(this.pulsePhase);
+      if (bellSine > 0.2) {
+        jetStretch = (bellSine - 0.2) * 0.22; // Bell narrows and elongates forward
+      }
+    }
+
+    const stretch = hasMotion ? Math.min(speed * 0.32 + jetStretch, 0.46) : jetStretch;
     const sx = 1 + stretch;
     const sy = 1 / Math.sqrt(sx); // preserve apparent volume
 

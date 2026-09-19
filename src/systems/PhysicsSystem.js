@@ -47,11 +47,13 @@ export class PhysicsSystem {
    * @param {import('../world/Threshold.js').Threshold} threshold
    * @param {number} dt - Delta time in ms.
    * @param {{ x: number, y: number }} wind - Current wind vector.
-    * @param {Array<{x: number, y: number}>} [touchPoints] - Active player touch points / ripples.
-    * @param {{x: number, y: number, life: number}|null} [activeNectar] - Active celestial nectar droplet.
-    */
-  update(creatures, threshold, dt, wind, touchPoints = [], activeNectar = null) {
+   * @param {Array<{x: number, y: number}>} [touchPoints] - Active player touch points / ripples.
+   * @param {{x: number, y: number, life: number}|null} [activeNectar] - Active celestial nectar droplet.
+   * @param {number} [now] - Current simulation timestamp.
+   */
+  update(creatures, threshold, dt, wind, touchPoints = [], activeNectar = null, now = 0) {
     const dtC  = Math.min(dt, 50);
+    const time = now || performance.now();
     const alive = creatures.filter(c => c.isAlive);
 
     for (const creature of alive) {
@@ -59,36 +61,36 @@ export class PhysicsSystem {
       if (creature.state === CreatureState.WITNESS) continue;
       if (creature.isDancing) continue;
 
-      const steering = this._computeSteering(creature, alive, threshold, wind, touchPoints, activeNectar);
+      const steering = this._computeSteering(creature, alive, threshold, wind, touchPoints, activeNectar, time);
       this._integrate(creature, steering, dtC);
     }
 
-    this._updateSymbioticPairs(alive, threshold, wind, dtC);
+    this._updateSymbioticPairs(alive, threshold, wind, dtC, time);
     this._updateDancingPairs(alive, dtC);
 
     // Final boundary clamp and kinematics update guarantee for all alive entities
     for (const creature of alive) {
       this._clampToBounds(creature);
-      creature.updateKinematics(dtC, performance.now());
+      creature.updateKinematics(dtC, time);
     }
   }
 
   // ── Steering composition ──────────────────────────────────────────────────
 
-  _computeSteering(creature, allCreatures, threshold, wind, touchPoints = [], activeNectar = null) {
+  _computeSteering(creature, allCreatures, threshold, wind, touchPoints = [], activeNectar = null, now = 0) {
     const wander   = this._wander(creature);
     const flock    = this._flocking(creature, allCreatures);
     const zoneAttr = this._zoneAttraction(creature, threshold);
     const boundary = this._boundary(creature);
     const threshAv = this._thresholdAvoidance(creature, threshold);
 
-    // Dynamic reaction to player touch (gentle, poetic reaction without chaos)
+    // Dynamic reaction to player touch & expanding ripple surf (gentle, poetic reaction)
     let touchX = 0, touchY = 0;
     const px = creature.position.x;
     const py = creature.position.y;
     const maxTouchDist = this.width <= 600 ? 95 : 120;
 
-    for (let i = 0; i < Math.min(touchPoints.length, 3); i++) {
+    for (let i = 0; i < Math.min(touchPoints.length, 4); i++) {
       const pt = touchPoints[i];
       const dx = pt.x - px;
       const dy = pt.y - py;
@@ -98,16 +100,32 @@ export class PhysicsSystem {
         const factor = (1 - dist / maxTouchDist);
         const invD = 1 / dist;
         if (creature.dna.adaptation > 0.52) {
-          touchX += dx * invD * (factor * 0.70);
-          touchY += dy * invD * (factor * 0.70);
+          touchX += dx * invD * (factor * 0.72);
+          touchY += dy * invD * (factor * 0.72);
         } else {
-          touchX -= dx * invD * (factor * 0.90);
-          touchY -= dy * invD * (factor * 0.90);
+          touchX -= dx * invD * (factor * 0.88);
+          touchY -= dy * invD * (factor * 0.88);
         }
         if (creature.isSleeping && factor > 0.35) {
           creature.wake();
         }
       }
+    }
+
+    // Threshold Thermocline Convection & Micro-Eddies
+    let thermoX = 0, thermoY = 0;
+    const distToThreshold = creature.position.y - threshold.y;
+    const absDist = Math.abs(distToThreshold);
+    const thermoclineZone = this.width <= 600 ? 80 : 120;
+
+    if (absDist < thermoclineZone) {
+      const proximity = (1 - absDist / thermoclineZone);
+      // Gentle solar thermal updraft (-Y) above, gentle abyssal sinking downwelling (+Y) below
+      const updraft = creature.position.y < threshold.y ? -0.16 : 0.16;
+      thermoY = updraft * proximity;
+      // Lateral micro-eddy current along membrane ripples
+      const tSec = now * 0.001;
+      thermoX = Math.cos(px * 0.015 + tSec * 0.9) * 0.18 * proximity;
     }
 
     // Attraction to celestial nectar droplet (gentle homing drift)
@@ -170,6 +188,7 @@ export class PhysicsSystem {
                  + threshAv.x * BOIDS.THRESHOLD_AVOID
                  + (wind?.x || 0) * BOIDS.WIND
                  + touchX
+                 + thermoX
                  + nectarX
                  + decisionX;
 
@@ -182,6 +201,7 @@ export class PhysicsSystem {
                  + threshAv.y * BOIDS.THRESHOLD_AVOID
                  + (wind?.y || 0) * BOIDS.WIND
                  + touchY
+                 + thermoY
                  + nectarY
                  + decisionY;
 
@@ -389,20 +409,47 @@ export class PhysicsSystem {
 
   _integrate(creature, steering, dt) {
     const isMobile = this.width <= 600;
-    let speed = Config.CREATURE.BASE_SPEED * (0.7 + creature.dna.adaptation * 0.5);
-    if (isMobile) speed *= 0.85; // Extra serene pace on mobile
-    if (creature.isSleeping) {
-      speed *= 0.22; // serene sleeping drift
+    let baseSpeed = Config.CREATURE.BASE_SPEED * (0.7 + creature.dna.adaptation * 0.5);
+    if (isMobile) baseSpeed *= 0.85; // Extra serene pace on mobile
+
+    // 1. Inércia por Massa: criaturas maiores possuem mais momento e aceleração mais ponderada
+    // creature.radius varia tipicamente de 8 a 24 (média ~14)
+    const mass = Math.pow(Math.max(0.6, creature.radius / 14), 1.4);
+
+    // 2. Propulsão Rítmica Biológica: Medusas avançam em jatos pulsantes; Arraias batem as asas
+    let pulseThrust = 1.0;
+    if (!creature.isSleeping) {
+      if (creature.bodyPlan === Config.BODY_PLAN.JELLYFISH) {
+        const bellSine = Math.sin(creature.pulsePhase);
+        if (bellSine > 0.2) {
+          // Fase de contração do sino: impulso a jato vigoroso
+          pulseThrust = 1.0 + Math.pow((bellSine - 0.2) / 0.8, 2) * 0.75;
+        } else {
+          // Fase de relaxamento do sino: desaceleração suave por arrasto
+          pulseThrust = 0.58;
+        }
+      } else if (creature.bodyPlan === Config.BODY_PLAN.MANTA) {
+        const wingSine = Math.sin(creature.wingPhase);
+        // Batimento descendente de asas gera micro-impulso de sustentação
+        pulseThrust = 0.85 + Math.max(0, wingSine) * 0.40;
+      }
+    } else {
+      baseSpeed *= 0.22; // serene sleeping drift
     }
 
-    // Viscous hydrodynamic damping (drag): natural graceful decay to serene resting glide
-    const drag = creature.isSleeping ? 0.94 : 0.965;
-    const dtFactor = Math.min(dt / 16, 2.0);
-    const accelScale = (creature.isSleeping ? 0.015 : 0.040) * dtFactor;
+    const currentSpeed = baseSpeed * pulseThrust;
 
-    creature.velocity = creature.velocity.scale(drag)
+    // Viscous hydrodynamic damping (drag):
+    // Mass conserves momentum longer in the celestial ether
+    const baseDrag = creature.isSleeping ? 0.94 : Math.min(0.98, 0.955 + (mass - 1) * 0.012);
+    const dtFactor = Math.min(dt / 16, 2.0);
+
+    // Newton's Second Law: a = (F / m) * pulseThrust
+    const accelScale = ((creature.isSleeping ? 0.015 : 0.040) / Math.sqrt(mass)) * dtFactor * pulseThrust;
+
+    creature.velocity = creature.velocity.scale(baseDrag)
       .add(steering.scale(accelScale))
-      .clampMagnitude(Config.CREATURE.MAX_SPEED * speed);
+      .clampMagnitude(Config.CREATURE.MAX_SPEED * currentSpeed);
 
     // Calm, organic displacement scaled with frame delta
     creature.position = creature.position.add(creature.velocity.scale(dt * 0.038));

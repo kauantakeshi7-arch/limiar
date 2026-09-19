@@ -1463,21 +1463,36 @@ export class Renderer {
     const segs = creature.segments;
     const numSegs = Math.min(segs.length, creature.dna.segmentCount + 2);
 
-    // 1. Translucent dorsal fin connecting the spine
+    // 1. Translucent undulating dorsal ribbon/fin (smooth Bézier spline)
     if (numSegs > 2) {
-      ctx.beginPath();
-      ctx.moveTo(segs[0].x, segs[0].y);
-      for (let i = 1; i < numSegs; i++) {
+      // Compute fin curve points with undulating finWave
+      const finPoints = [];
+      for (let i = 0; i < numSegs; i++) {
         const s = segs[i];
         const normalAng = s.angle + Math.PI / 2;
-        const finWave = Math.sin(now * 0.005 + i * 0.9) * (s.radius * 0.4);
-        const fx = s.x + Math.cos(normalAng) * (s.radius * 0.7 + finWave);
-        const fy = s.y + Math.sin(normalAng) * (s.radius * 0.7 + finWave);
-        ctx.lineTo(fx, fy);
+        const finWave = Math.sin(now * 0.005 + i * 0.9) * (s.radius * 0.45);
+        finPoints.push({
+          x: s.x + Math.cos(normalAng) * (s.radius * 0.75 + finWave),
+          y: s.y + Math.sin(normalAng) * (s.radius * 0.75 + finWave)
+        });
       }
-      for (let i = numSegs - 1; i >= 0; i--) {
-        ctx.lineTo(segs[i].x, segs[i].y);
+
+      ctx.beginPath();
+      ctx.moveTo(finPoints[0].x, finPoints[0].y);
+      for (let i = 1; i < finPoints.length - 1; i++) {
+        const midX = (finPoints[i].x + finPoints[i + 1].x) * 0.5;
+        const midY = (finPoints[i].y + finPoints[i + 1].y) * 0.5;
+        ctx.quadraticCurveTo(finPoints[i].x, finPoints[i].y, midX, midY);
       }
+      ctx.lineTo(finPoints[finPoints.length - 1].x, finPoints[finPoints.length - 1].y);
+
+      // Return along the spine with quadratic smoothing through segment midpoints
+      for (let i = numSegs - 1; i > 0; i--) {
+        const midX = (segs[i].x + segs[i - 1].x) * 0.5;
+        const midY = (segs[i].y + segs[i - 1].y) * 0.5;
+        ctx.quadraticCurveTo(segs[i].x, segs[i].y, midX, midY);
+      }
+      ctx.lineTo(segs[0].x, segs[0].y);
       ctx.closePath();
       ctx.fillStyle = creature.color.toGlowHSLAWithAlpha(0.2, 0.18);
       ctx.fill();

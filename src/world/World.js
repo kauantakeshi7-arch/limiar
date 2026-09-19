@@ -123,8 +123,8 @@ export class World {
     // 4.8. Autonomous Cognitive AI: update drives, sensory perception, and conscious decisions
     this._decision.update(this.creatures, this.threshold, touchPoints, this.activeNectar, dt, now);
 
-    // 5. Physics: steering, movement, sleep damping, dance, nectar pull
-    this._physics.update(this.creatures, this.threshold, dt, this.wind, touchPoints, this.activeNectar);
+    // 5. Physics: steering, movement, sleep damping, dance, nectar pull, thermocline convection
+    this._physics.update(this.creatures, this.threshold, dt, this.wind, touchPoints, this.activeNectar, now);
 
     // 5.5. Update active nectar consumption
     this._updateNectar(now, dt);
