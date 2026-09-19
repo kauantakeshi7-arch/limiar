@@ -1,6 +1,7 @@
 import { World } from '../world/World.js';
 import { Renderer } from '../rendering/Renderer.js';
 import { InspectCard } from '../ui/InspectCard.js';
+import { PWAInstaller } from '../ui/PWAInstaller.js';
 import { Config } from './Config.js';
 
 /**
@@ -34,6 +35,7 @@ export class Game {
     this._diaryOpen    = false;
     this._bestiaryOpen = false;
     this._inspectCard  = new InspectCard();
+    this._pwaInstaller = new PWAInstaller();
     this._timeScale    = 1.0;
 
     /** @type {Array<{x:number, y:number, startTime:number}>} */

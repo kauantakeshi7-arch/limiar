@@ -9,8 +9,8 @@
   <meta name="apple-mobile-web-app-title" content="LIMIAR">
   <meta name="theme-color" content="#0a0420">
   <title>LIMIAR — Entre existir e desvanecer</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%230a0420'/><circle cx='50' cy='50' r='32' fill='%23f5d070'/><path d='M50,2 A48,48 0 0,1 50,98 A24,24 0 0,1 50,50 A24,24 0 0,0 50,2' fill='%236030c0'/></svg>">
-  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%230a0420'/><circle cx='50' cy='50' r='32' fill='%23f5d070'/><path d='M50,2 A48,48 0 0,1 50,98 A24,24 0 0,1 50,50 A24,24 0 0,0 50,2' fill='%236030c0'/></svg>">
+  <link rel="icon" type="image/svg+xml" href="icons/icon-192.svg">
+  <link rel="apple-touch-icon" href="icons/icon-192.svg">
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -90,8 +90,59 @@
       <button id="btn-photo"    class="hud-btn" title="Capturar Wallpaper" aria-label="Capturar Foto">📷</button>
       <button id="btn-diary"    class="hud-btn" title="Diário"    aria-label="Abrir Diário">📖</button>
       <button id="btn-bestiary" class="hud-btn" title="Bestiário" aria-label="Abrir Bestiário">🦋</button>
+      <button id="btn-install"  class="hud-btn" title="Instalar no Celular" aria-label="Instalar no Celular">📲</button>
     </div>
     <button id="btn-hud-toggle" class="hud-btn hud-toggle" title="Menu" aria-label="Alternar Controles" aria-expanded="false">✦</button>
+  </div>
+
+  <!-- ── PWA Install Banner ──────────────────────────────────────── -->
+  <div id="pwa-install-banner" class="install-banner hidden" role="region" aria-label="Instalação do Aplicativo">
+    <div class="install-banner-content">
+      <div class="install-icon-wrap">
+        <span class="install-icon">📲</span>
+      </div>
+      <div class="install-info">
+        <strong class="install-title">Instalar LIMIAR</strong>
+        <span class="install-desc">Jogue em tela cheia e offline no seu celular</span>
+      </div>
+    </div>
+    <div class="install-actions">
+      <button id="btn-pwa-install" class="install-action-btn">Instalar</button>
+      <button id="btn-pwa-dismiss" class="install-close-btn" aria-label="Fechar">×</button>
+    </div>
+  </div>
+
+  <!-- ── iOS / Mobile PWA Guide Modal ────────────────────────────── -->
+  <div id="ios-install-modal" class="overlay hidden" role="dialog" aria-label="Como instalar no celular">
+    <div class="overlay-inner ios-modal-inner">
+      <div class="overlay-header">
+        <h2>Instalar no Celular</h2>
+        <button id="ios-modal-close" class="close-btn" aria-label="Fechar">×</button>
+      </div>
+      <div class="scroll-area ios-guide-body">
+        <div class="ios-guide-step">
+          <span class="step-num">1</span>
+          <div class="step-text">
+            <strong>Toque em Compartilhar</strong>
+            <p>No Safari do seu iPhone/iPad, toque no ícone de compartilhamento <span class="ios-inline-icon">⎋</span> na barra de navegação.</p>
+          </div>
+        </div>
+        <div class="ios-guide-step">
+          <span class="step-num">2</span>
+          <div class="step-text">
+            <strong>Adicionar à Tela de Início</strong>
+            <p>Role a lista de opções e toque em <span class="ios-inline-icon">➕</span> <em>"Adicionar à Tela de Início"</em>.</p>
+          </div>
+        </div>
+        <div class="ios-guide-step">
+          <span class="step-num">3</span>
+          <div class="step-text">
+            <strong>Confirmar</strong>
+            <p>Toque em <em>"Adicionar"</em> no topo para iniciar o LIMIAR em tela cheia como um aplicativo independente.</p>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ── Photo Flash Effect ─────────────────────────────────────── -->
