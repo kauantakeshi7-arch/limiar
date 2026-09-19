@@ -130,10 +130,7 @@ export class DNA {
     } else if (parentB.legendaryTrait && Random.chance(0.48)) {
       trait = parentB.legendaryTrait;
     } else if (Random.chance(Config.LEGENDARY?.MUTATION_CHANCE_BASE || 0.035)) {
-      const allTraits = Object.values(Config.LEGENDARY?.TRAITS || {});
-      if (allTraits.length > 0) {
-        trait = allTraits[Math.floor(Math.random() * allTraits.length)];
-      }
+      trait = DNA._randomLegendaryTrait();
     }
     genes.legendaryTrait = trait;
 
@@ -151,10 +148,7 @@ export class DNA {
     }
     genes.legendaryTrait = this.legendaryTrait;
     if (!genes.legendaryTrait && Random.chance(Config.LEGENDARY?.MUTATION_CHANCE_BASE || 0.035)) {
-      const allTraits = Object.values(Config.LEGENDARY?.TRAITS || {});
-      if (allTraits.length > 0) {
-        genes.legendaryTrait = allTraits[Math.floor(Math.random() * allTraits.length)];
-      }
+      genes.legendaryTrait = DNA._randomLegendaryTrait();
     }
     return new DNA(genes);
   }
@@ -170,12 +164,15 @@ export class DNA {
       genes[key] = Random.next();
     }
     if (Random.chance(Config.LEGENDARY?.MUTATION_CHANCE_BASE || 0.035)) {
-      const allTraits = Object.values(Config.LEGENDARY?.TRAITS || {});
-      if (allTraits.length > 0) {
-        genes.legendaryTrait = allTraits[Math.floor(Math.random() * allTraits.length)];
-      }
+      genes.legendaryTrait = DNA._randomLegendaryTrait();
     }
     return new DNA(genes);
+  }
+
+  /** Helper to select a random legendary trait from Config. */
+  static _randomLegendaryTrait() {
+    const allTraits = Object.values(Config.LEGENDARY?.TRAITS || {});
+    return allTraits.length > 0 ? Random.choice(allTraits) : null;
   }
 
   /** Gene keys for iteration and inheritance. */
