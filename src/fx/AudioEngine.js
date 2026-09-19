@@ -134,11 +134,15 @@ export class AudioEngine {
 
     const osc = this._ctx.createOscillator();
     const gain = this._makeGain(0.028);
+    const filter = this._makeDepthFilter(ratio);
+    const panner = this._makePanner(0.5);
     osc.type = 'sine';
     osc.frequency.value = freq;
 
     osc.connect(gain);
-    gain.connect(this._reverb);
+    gain.connect(filter);
+    filter.connect(panner);
+    panner.connect(this._reverb);
 
     osc.start(now);
     gain.gain.setValueAtTime(0.028, now);
@@ -147,10 +151,12 @@ export class AudioEngine {
   }
 
   /**
-   * Pluck a specific note along the threshold horizontal harp.
+   * Pluck a specific note along the threshold horizontal liquid harp.
+   * Modulated with 3D binaural stereo pan and abyssal hydroacoustic filter.
    * @param {number} xRatio - 0 (left) to 1 (right).
+   * @param {number} [yRatio=0.5] - 0 (light) to 1 (shadow).
    */
-  pluckHarp(xRatio) {
+  pluckHarp(xRatio, yRatio = 0.5) {
     if (!this._initialized || this.isMuted) return;
     const now = this._ctx.currentTime;
     if (this._lastHarpTime && now - this._lastHarpTime < 0.07) return;
@@ -160,25 +166,25 @@ export class AudioEngine {
       146.83, 164.81, 196.00, 220.00, 246.94,
       293.66, 329.63, 392.00, 440.00, 493.88, 587.33,
     ];
-    const clampedRatio = Math.max(0, Math.min(1, xRatio));
+    const clampedRatio = Math.max(0, Math.min(1, xRatio > 1.0 ? xRatio / 1200 : xRatio));
     const idx = Math.min(notes.length - 1, Math.floor(clampedRatio * notes.length));
     const freq = notes[idx];
 
     const osc = this._ctx.createOscillator();
     const osc2 = this._ctx.createOscillator();
     const gain = this._makeGain(0.038);
-    const panner = this._ctx.createStereoPanner();
+    const filter = this._makeDepthFilter(yRatio);
+    const panner = this._makePanner(clampedRatio);
 
     osc.type = 'sine';
     osc.frequency.value = freq;
     osc2.type = 'sine';
     osc2.frequency.value = freq * 2;
 
-    panner.pan.value = clampedRatio * 1.8 - 0.9;
-
     osc.connect(gain);
     osc2.connect(gain);
-    gain.connect(panner);
+    gain.connect(filter);
+    filter.connect(panner);
     panner.connect(this._reverb);
 
     osc.start(now);
@@ -194,9 +200,11 @@ export class AudioEngine {
 
   /**
    * Crystalline arpeggio chime when a creature feeds on celestial nectar.
+   * Modulated with 3D binaural stereo pan and abyssal hydroacoustic filter.
    * @param {number} [xRatio=0.5]
+   * @param {number} [yRatio=0.5]
    */
-  playNectarChime(xRatio = 0.5) {
+  playNectarChime(xRatio = 0.5, yRatio = 0.5) {
     if (!this._initialized || this.isMuted) return;
     const now = this._ctx.currentTime;
     const baseFreq = 523.25;
@@ -204,14 +212,15 @@ export class AudioEngine {
       const t = now + i * 0.08;
       const osc = this._ctx.createOscillator();
       const gain = this._makeGain(0.022);
-      const panner = this._ctx.createStereoPanner();
+      const filter = this._makeDepthFilter(yRatio);
+      const panner = this._makePanner(xRatio);
 
       osc.type = 'sine';
       osc.frequency.value = freq;
-      panner.pan.value = Math.max(-0.9, Math.min(0.9, (xRatio - 0.5) * 1.8));
 
       osc.connect(gain);
-      gain.connect(panner);
+      gain.connect(filter);
+      filter.connect(panner);
       panner.connect(this._reverb);
 
       osc.start(t);
@@ -223,18 +232,26 @@ export class AudioEngine {
 
   /**
    * Harmonious chime when two opposite creatures perform the Courtship Dance.
+   * Modulated with 3D binaural stereo pan and abyssal hydroacoustic filter.
+   * @param {number} [xPos=0.5]
+   * @param {number} [yPos=0.5]
    */
-  playCourtship(xPos = 600, width = 1200) {
+  playCourtship(xPos = 0.5, yPos = 0.5) {
     if (!this._initialized || this.isMuted) return;
     const now = this._ctx.currentTime;
     const root = 220;
+    const panner = this._makePanner(xPos);
+    const filter = this._makeDepthFilter(yPos);
+
     [root, root * 1.5, root * 2.25].forEach((freq, i) => {
       const osc = this._ctx.createOscillator();
       const gain = this._makeGain(0.016);
       osc.type = 'sine';
       osc.frequency.value = freq;
       osc.connect(gain);
-      gain.connect(this._reverb);
+      gain.connect(filter);
+      filter.connect(panner);
+      panner.connect(this._reverb);
       osc.start(now + i * 0.06);
       gain.gain.setValueAtTime(0.016, now + i * 0.06);
       gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.6);
@@ -251,7 +268,8 @@ export class AudioEngine {
   // ── Creature tones ────────────────────────────────────────────────────────
 
   /**
-   * Add a soft, DNA-tuned oscillator for a creature.
+   * Add a soft, DNA-tuned oscillator for a creature with dedicated 3D binaural
+   * pan and depth filter.
    * @param {import('../entities/Creature.js').Creature} creature
    */
   addCreature(creature) {
@@ -263,18 +281,20 @@ export class AudioEngine {
 
     const osc  = this._ctx.createOscillator();
     const gain = this._makeGain(0);
-    const panner = this._ctx.createStereoPanner();
+    const filter = this._makeDepthFilter(creature.position.y / 800);
+    const panner = this._makePanner(creature.position.x / 1200);
 
     osc.type = creature.originZone === 'light' ? 'sine' : 'triangle';
     osc.frequency.value = freq + creature.dna.rhythm * 4; // slight detune by rhythm
     osc.connect(gain);
-    gain.connect(panner);
+    gain.connect(filter);
+    filter.connect(panner);
     panner.connect(this._reverb);
 
     osc.start();
     gain.gain.linearRampToValueAtTime(0.018, this._ctx.currentTime + 2);
 
-    this._creatureNodes.set(creature.id, { osc, gain, panner });
+    this._creatureNodes.set(creature.id, { osc, gain, filter, panner });
   }
 
   /**
@@ -296,15 +316,35 @@ export class AudioEngine {
   }
 
   /**
-   * Update a creature's oscillator pan based on its X position.
+   * Update a creature's 3D binaural stereo pan and abyssal depth filter.
+   * When swimming to the Light, the tone turns crystalline and airy.
+   * When diving to the Shadow, the tone submerges into an oceanic resonant bass.
    * @param {import('../entities/Creature.js').Creature} creature
    * @param {number} canvasWidth
+   * @param {number} [canvasHeight=800]
+   * @param {number} [thresholdY]
    */
-  updateCreaturePosition(creature, canvasWidth) {
+  updateCreaturePosition(creature, canvasWidth, canvasHeight = 800, thresholdY = null) {
     if (!this._initialized) return;
     const node = this._creatureNodes.get(creature.id);
     if (!node) return;
-    node.panner.pan.value = (creature.position.x / canvasWidth) * 2 - 1;
+
+    const xRatio = creature.position.x / (canvasWidth || 1200);
+    const yRatio = creature.position.y / (canvasHeight || 800);
+
+    // 1. Binaural Stereo Pan with natural crossfeed
+    if (node.panner && node.panner.pan) {
+      const panVal = Math.max(-0.88, Math.min(0.88, (xRatio - 0.5) * 1.76));
+      node.panner.pan.value = panVal;
+    }
+
+    // 2. Abyssal Hydroacoustic Depth Filter
+    if (node.filter && this._ctx) {
+      const { freq, q } = this._computeDepthAcoustics(yRatio);
+      const now = this._ctx.currentTime;
+      node.filter.frequency.setTargetAtTime(freq, now, 0.12);
+      node.filter.Q.setTargetAtTime(q, now, 0.12);
+    }
   }
 
   // ── Threshold modulation ──────────────────────────────────────────────────
@@ -325,16 +365,18 @@ export class AudioEngine {
 
   // ── Event sounds ──────────────────────────────────────────────────────────
 
-  playTranscendence() { this._playTone(880, 'sine', 0.15, 3.0); }
-  playTransformation() { this._playTone(440, 'triangle', 0.08, 0.8); }
-  playDissolution()  { this._playTone(110, 'sawtooth', 0.06, 1.2); }
-  playSymbiosis()    { this._playTone(660, 'sine', 0.1, 1.0); }
+  playTranscendence(xRatio = 0.5, yRatio = 0.3) { this._playTone(880, 'sine', 0.15, 3.0, xRatio, yRatio); }
+  playTransformation(xRatio = 0.5, yRatio = 0.5) { this._playTone(440, 'triangle', 0.08, 0.8, xRatio, yRatio); }
+  playDissolution(xRatio = 0.5, yRatio = 0.8)  { this._playTone(110, 'sawtooth', 0.06, 1.2, xRatio, yRatio); }
+  playSymbiosis(xRatio = 0.5, yRatio = 0.5)    { this._playTone(660, 'sine', 0.1, 1.0, xRatio, yRatio); }
 
   /**
    * Organic reed rustle when brushing flora.
+   * Modulated with 3D binaural stereo pan and abyssal hydroacoustic filter.
    * @param {number} [xRatio=0.5]
+   * @param {number} [yRatio=0.5]
    */
-  playFloraRustle(xRatio = 0.5) {
+  playFloraRustle(xRatio = 0.5, yRatio = 0.5) {
     if (!this._initialized || this.isMuted) return;
     const now = this._ctx.currentTime;
     if (this._lastRustle && now - this._lastRustle < 0.12) return;
@@ -342,15 +384,16 @@ export class AudioEngine {
 
     const osc = this._ctx.createOscillator();
     const gain = this._makeGain(0.012);
-    const panner = this._ctx.createStereoPanner();
-    panner.pan.value = Math.max(-0.9, Math.min(0.9, (xRatio - 0.5) * 1.8));
+    const filter = this._makeDepthFilter(yRatio);
+    const panner = this._makePanner(xRatio);
 
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(620 + Math.random() * 240, now);
     osc.frequency.exponentialRampToValueAtTime(340, now + 0.25);
 
     osc.connect(gain);
-    gain.connect(panner);
+    gain.connect(filter);
+    filter.connect(panner);
     panner.connect(this._reverb);
 
     osc.start(now);
@@ -361,14 +404,16 @@ export class AudioEngine {
 
   /**
    * Cosmic Player Call — Deep crystal bowl singing bell.
+   * Modulated with 3D binaural stereo pan and abyssal hydroacoustic filter.
    * @param {number} [xRatio=0.5]
+   * @param {number} [yRatio=0.5]
    */
-  playPlayerCall(xRatio = 0.5) {
+  playPlayerCall(xRatio = 0.5, yRatio = 0.5) {
     if (!this._initialized || this.isMuted) return;
     const now = this._ctx.currentTime;
     const freqs = [293.66, 440.0, 587.33]; // D4, A4, D5 celestial triad
-    const panner = this._ctx.createStereoPanner();
-    panner.pan.value = Math.max(-0.9, Math.min(0.9, (xRatio - 0.5) * 1.8));
+    const panner = this._makePanner(xRatio);
+    const filter = this._makeDepthFilter(yRatio);
 
     freqs.forEach((freq, idx) => {
       const osc = this._ctx.createOscillator();
@@ -378,7 +423,8 @@ export class AudioEngine {
       osc.frequency.value = freq;
 
       osc.connect(gain);
-      gain.connect(panner);
+      gain.connect(filter);
+      filter.connect(panner);
       panner.connect(this._reverb);
 
       const delay = idx * 0.08;
@@ -395,9 +441,12 @@ export class AudioEngine {
 
   /**
    * Creature sings back to the player in harmonic resonance.
+   * Modulated with 3D binaural stereo pan and abyssal hydroacoustic filter.
    * @param {import('../entities/Creature.js').Creature} creature
+   * @param {number} [canvasWidth=1200]
+   * @param {number} [canvasHeight=800]
    */
-  playCreatureChirp(creature) {
+  playCreatureChirp(creature, canvasWidth = 1200, canvasHeight = 800) {
     if (!this._initialized || this.isMuted) return;
     const now = this._ctx.currentTime;
     const notes = creature.originZone === 'light' ? this._lightNotes : this._shadowNotes;
@@ -405,8 +454,8 @@ export class AudioEngine {
 
     const osc = this._ctx.createOscillator();
     const gain = this._makeGain(0.0001);
-    const panner = this._ctx.createStereoPanner();
-    panner.pan.value = Math.max(-0.9, Math.min(0.9, (creature.position.x / 1200) * 2 - 1));
+    const panner = this._makePanner(creature.position.x / canvasWidth);
+    const filter = this._makeDepthFilter(creature.position.y / canvasHeight);
 
     osc.type = creature.legendaryTrait ? 'sine' : (creature.originZone === 'light' ? 'triangle' : 'sine');
     osc.frequency.setValueAtTime(baseFreq * 1.5, now);
@@ -414,7 +463,8 @@ export class AudioEngine {
     osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, now + 0.35);
 
     osc.connect(gain);
-    gain.connect(panner);
+    gain.connect(filter);
+    filter.connect(panner);
     panner.connect(this._reverb);
 
     osc.start(now);
@@ -426,6 +476,89 @@ export class AudioEngine {
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────
+
+  /**
+   * Helper to construct a safe StereoPannerNode with crossfeed clamp.
+   * Clamps pan to [-0.88, +0.88] to avoid hard channel separation on headphones.
+   * @param {number} xRatio - 0 (left) to 1 (right). Can also handle pixel X if > 1.
+   * @returns {StereoPannerNode|GainNode}
+   */
+  /**
+   * Pure calculation of stereo pan value clamped to [-0.88, +0.88].
+   * @param {number} xRatio - 0 (left) to 1 (right). Can also handle pixel X if > 1.
+   * @returns {number}
+   */
+  _computePan(xRatio = 0.5) {
+    const ratio = xRatio > 1.0 ? Math.min(1, Math.max(0, xRatio / 1200)) : Math.min(1, Math.max(0, xRatio));
+    return Math.max(-0.88, Math.min(0.88, (ratio - 0.5) * 1.76));
+  }
+
+  /**
+   * Helper to construct a safe StereoPannerNode with crossfeed clamp.
+   * Clamps pan to [-0.88, +0.88] to avoid hard channel separation on headphones.
+   * @param {number} xRatio - 0 (left) to 1 (right). Can also handle pixel X if > 1.
+   * @returns {StereoPannerNode|GainNode|null}
+   */
+  _makePanner(xRatio = 0.5) {
+    if (!this._ctx) return null;
+    const panVal = this._computePan(xRatio);
+
+    if (typeof this._ctx.createStereoPanner === 'function') {
+      const panner = this._ctx.createStereoPanner();
+      panner.pan.value = panVal;
+      return panner;
+    }
+    // Transparent pass-through fallback
+    return this._makeGain(1.0);
+  }
+
+  /**
+   * Helper to calculate depth hydroacoustic lowpass cutoff and resonance Q.
+   * In Light (yRatio < 0.45): 2400Hz - 4800Hz, airy and crystalline (Q = 0.70).
+   * In Threshold (0.45 <= yRatio <= 0.55): 1800Hz - 2200Hz, balanced (Q = 0.85).
+   * In Shadow (yRatio > 0.55): 1600Hz down to 320Hz, deep subaquatic resonance (Q = 0.90 to 1.65).
+   * @param {number} yRatio - 0 (top/light) to 1 (bottom/abyss). Can also handle pixel Y if > 1.
+   * @returns {{ freq: number, q: number }}
+   */
+  _computeDepthAcoustics(yRatio = 0.5) {
+    const y = yRatio > 1.0 ? Math.min(1, Math.max(0, yRatio / 800)) : Math.min(1, Math.max(0, yRatio));
+
+    if (y < 0.45) {
+      // Light Realm: Open, crystalline, high harmonic air
+      const normY = y / 0.45;
+      const freq = 2400 + (1.0 - normY) * 2400; // 2400 to 4800 Hz
+      return { freq, q: 0.70 };
+    } else if (y <= 0.55) {
+      // Threshold Transition Membrane
+      const normY = (y - 0.45) / 0.10;
+      const freq = 2200 - normY * 400; // 2200 to 1800 Hz
+      return { freq, q: 0.85 };
+    } else {
+      // Shadow Realm: Dense abyssal waters, heavy high-frequency absorption & resonant depth
+      const depth = (y - 0.55) / 0.45; // 0.0 to 1.0
+      const freq = Math.max(280, 1600 - depth * 1280); // 1600 down to 320 Hz
+      const q = 0.90 + depth * 0.75; // 0.90 to 1.65
+      return { freq, q };
+    }
+  }
+
+  /**
+   * Constructs a BiquadFilterNode tuned to the depth (Y ratio).
+   * @param {number} yRatio
+   * @returns {BiquadFilterNode|GainNode|null}
+   */
+  _makeDepthFilter(yRatio = 0.5) {
+    if (!this._ctx) return null;
+    const { freq, q } = this._computeDepthAcoustics(yRatio);
+    if (typeof this._ctx.createBiquadFilter === 'function') {
+      const filter = this._ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = freq;
+      filter.Q.value = q;
+      return filter;
+    }
+    return this._makeGain(1.0);
+  }
 
   _makeGain(value) {
     const g = this._ctx.createGain();
@@ -470,14 +603,19 @@ export class AudioEngine {
     return convolver;
   }
 
-  _playTone(freq, type, volume, duration) {
+  _playTone(freq, type, volume, duration, xRatio = 0.5, yRatio = 0.5) {
     if (!this._initialized || this.isMuted) return;
     const osc  = this._ctx.createOscillator();
     const gain = this._makeGain(volume);
+    const filter = this._makeDepthFilter(yRatio);
+    const panner = this._makePanner(xRatio);
+
     osc.type = type;
     osc.frequency.value = freq;
     osc.connect(gain);
-    gain.connect(this._masterGain);
+    gain.connect(filter);
+    filter.connect(panner);
+    panner.connect(this._masterGain);
     osc.start();
     gain.gain.linearRampToValueAtTime(0, this._ctx.currentTime + duration);
     setTimeout(() => { try { osc.stop(); } catch (_) {} }, duration * 1000 + 100);

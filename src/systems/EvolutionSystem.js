@@ -144,7 +144,7 @@ export class EvolutionSystem {
       creature.transitionTo(CreatureState.TRANSCENDENT);
       creature.radius = creature.baseRadius * 1.6;
       particles.emitTranscendBurst(creature.position.x, creature.position.y);
-      audio.playTranscendence();
+      audio.playTranscendence(creature.position.x, creature.position.y);
       globalBus.emit(Events.CREATURE_TRANSCENDED, creature);
       return;
     }
@@ -152,7 +152,7 @@ export class EvolutionSystem {
     // TRANSFORMED — survives in foreign zone for a time before dissolving
     creature.transitionTo(CreatureState.TRANSFORMED);
     creature.crossingStartTime = now; // reuse timer for dissolve delay
-    audio.playTransformation();
+    audio.playTransformation(creature.position.x, creature.position.y);
     globalBus.emit(Events.CREATURE_TRANSFORMED, creature);
   }
 
@@ -166,7 +166,7 @@ export class EvolutionSystem {
 
     if (creature.radius <= 1 || creature.color.a <= 0) {
       creature.isAlive = false;
-      audio.playDissolution();
+      audio.playDissolution(creature.position.x, creature.position.y);
       globalBus.emit(Events.CREATURE_DISSOLVED, creature);
     }
   }
@@ -258,7 +258,7 @@ export class EvolutionSystem {
     this._singularityTarget = target;
     this._singularityEnd    = now + Config.RARE.SINGULARITY_DURATION_MS;
     globalBus.emit(Events.RARE_SINGULARITY, target);
-    audio.playTranscendence();
+    audio.playTranscendence(target.position.x, target.position.y);
   }
 
   _checkWitness(creatures, now) {

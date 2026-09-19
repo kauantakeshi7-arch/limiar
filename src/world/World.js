@@ -143,7 +143,7 @@ export class World {
     // 8. Sync audio to creature positions & adaptive atmosphere
     this.audio.update(now, this.diurnalFactor, this.creatures);
     for (const c of this.creatures) {
-      if (c.isAlive) this.audio.updateCreaturePosition(c, this._width);
+      if (c.isAlive) this.audio.updateCreaturePosition(c, this._width, this._height, this.threshold.y);
     }
 
     // 9. Cleanup dead creatures
@@ -202,7 +202,7 @@ export class World {
       charges: 3,
       createdAt: performance.now(),
     };
-    this.audio.playNectarChime(x / this._width);
+    this.audio.playNectarChime(x / this._width, y / this._height);
     this.particles.emitNectarFeedBurst(x, y);
     globalBus.emit(Events.NECTAR_SPAWNED, this.activeNectar);
   }
@@ -213,7 +213,7 @@ export class World {
    */
   pluckHarp(xRatio) {
     this.threshold.addHarpImpulse(xRatio);
-    this.audio.pluckHarp(xRatio);
+    this.audio.pluckHarp(xRatio, this.threshold.y / this._height);
   }
 
   /**
@@ -239,7 +239,7 @@ export class World {
         });
         this.particles.emitFloraSpore(r.x, r.y, r.side);
       }
-      this.audio.playFloraRustle?.(px / this._width);
+      this.audio.playFloraRustle?.(px / this._width, py / this._height);
       globalBus.emit(Events.FLORA_SPORES, { count: released.length, x: px, y: py });
     }
   }
@@ -261,7 +261,7 @@ export class World {
     };
     if (this.playerCalls.length >= 8) this.playerCalls.shift();
     this.playerCalls.push(call);
-    this.audio.playPlayerCall(px / this._width);
+    this.audio.playPlayerCall(px / this._width, py / this._height);
     globalBus.emit(Events.PLAYER_CALL, { x: px, y: py });
 
     // Nearby conscious creatures notice and answer back in song
@@ -282,7 +282,7 @@ export class World {
           responderCount++;
           setTimeout(() => {
             if (c.isAlive) {
-              this.audio.playCreatureChirp(c);
+              this.audio.playCreatureChirp(c, this._width, this._height);
               this.particles.emitDreamMote(c.position.x, c.position.y, c.color);
             }
           }, delay);
@@ -431,7 +431,7 @@ export class World {
         c.consumeNectar(0.45);
         this.activeNectar.charges--;
         this.particles.emitNectarFeedBurst(this.activeNectar.x, this.activeNectar.y);
-        this.audio.playNectarChime(this.activeNectar.x / this._width);
+        this.audio.playNectarChime(this.activeNectar.x / this._width, this.activeNectar.y / this._height);
         if (this.activeNectar.charges <= 0) {
           this.activeNectar = null;
           break;

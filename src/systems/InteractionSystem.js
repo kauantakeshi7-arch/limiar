@@ -99,12 +99,10 @@ export class InteractionSystem {
         a.isChimera = true;
         b.isChimera = true;
       }
-      particles.emitTransformBurst(
-        (a.position.x + b.position.x) / 2,
-        (a.position.y + b.position.y) / 2,
-        a.color,
-      );
-      audio.playSymbiosis();
+      const midX = (a.position.x + b.position.x) / 2;
+      const midY = (a.position.y + b.position.y) / 2;
+      particles.emitTransformBurst(midX, midY, a.color);
+      audio.playSymbiosis(midX, midY);
       globalBus.emit(Events.INTERACTION_SYMBIOSIS, a, b);
     }
     return [];
@@ -123,7 +121,7 @@ export class InteractionSystem {
         const duration = Config.ECOSYSTEM?.DANCE_DURATION_MS || 5500;
         a.startDance(b, duration);
         b.startDance(a, duration);
-        audio.playCourtship?.(midX);
+        audio.playCourtship?.(midX, midY);
         globalBus.emit(Events.CREATURE_DANCE, a, b);
         return [];
       }
