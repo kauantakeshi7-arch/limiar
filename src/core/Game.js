@@ -334,8 +334,14 @@ export class Game {
   // ── UI ────────────────────────────────────────────────────────────────────
 
   _bindUI() {
-    document.getElementById('btn-diary')?.addEventListener('click', () => this._toggleOverlay('diary'));
-    document.getElementById('btn-bestiary')?.addEventListener('click', () => this._toggleOverlay('bestiary'));
+    document.getElementById('btn-diary')?.addEventListener('click', () => {
+      this._inspectCard?.close();
+      this._toggleOverlay('diary');
+    });
+    document.getElementById('btn-bestiary')?.addEventListener('click', () => {
+      this._inspectCard?.close();
+      this._toggleOverlay('bestiary');
+    });
     document.getElementById('diary-close')?.addEventListener('click', () => this._closeOverlay('diary'));
     document.getElementById('bestiary-close')?.addEventListener('click', () => this._closeOverlay('bestiary'));
 

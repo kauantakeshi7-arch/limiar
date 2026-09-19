@@ -2270,17 +2270,17 @@ export class Renderer {
     for (let i = 0; i < spores.length; i++) {
       const s = spores[i];
       const alpha = Math.max(0, Math.min(1, s.life * 0.85));
-      const pulse = 0.8 + 0.2 * Math.sin(now * 0.006 + i);
-      const r = s.radius * pulse;
+      const r = Math.max(1, s.radius * pulse);
+      const outerR = Math.max(1.5, r * 2.5);
 
-      const grad = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, r * 2.5);
+      const grad = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, outerR);
       grad.addColorStop(0, s.color.toHSLAWithAlpha(alpha));
       grad.addColorStop(0.5, s.color.toHSLAWithAlpha(alpha * 0.4));
       grad.addColorStop(1, 'rgba(0,0,0,0)');
 
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.arc(s.x, s.y, r * 2.5, 0, Math.PI * 2);
+      ctx.arc(s.x, s.y, outerR, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.fillStyle = '#fffdf0';
