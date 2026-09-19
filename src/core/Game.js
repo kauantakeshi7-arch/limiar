@@ -2,6 +2,7 @@ import { World } from '../world/World.js';
 import { Renderer } from '../rendering/Renderer.js';
 import { InspectCard } from '../ui/InspectCard.js';
 import { PWAInstaller } from '../ui/PWAInstaller.js';
+import { WakeLock } from '../utils/WakeLock.js';
 import { Config } from './Config.js';
 
 /**
@@ -36,6 +37,7 @@ export class Game {
     this._bestiaryOpen = false;
     this._inspectCard  = new InspectCard();
     this._pwaInstaller = new PWAInstaller();
+    this._wakeLock     = new WakeLock();
     this._timeScale    = 1.0;
 
     /** @type {Array<{x:number, y:number, startTime:number}>} */
@@ -69,6 +71,7 @@ export class Game {
     this._running = false;
     if (this._rafId) cancelAnimationFrame(this._rafId);
     this._world.audio.dispose();
+    this._wakeLock.release();
   }
 
   // ── Game loop ─────────────────────────────────────────────────────────────
@@ -170,6 +173,7 @@ export class Game {
         this._world.audio.init();
         this._audioReady = true;
       }
+      this._wakeLock.request();
     };
     window.addEventListener('pointerdown', unlockAudio, { once: true, passive: true });
     window.addEventListener('touchstart',  unlockAudio, { once: true, passive: true });
@@ -210,11 +214,12 @@ export class Game {
   _onPointerDown(event) {
     event.preventDefault();
 
-    // Bootstrap audio on first gesture (browser requires user interaction)
+    // Bootstrap audio & wake lock on first gesture (browser requires user interaction)
     if (!this._audioReady) {
       this._world.audio.init();
       this._audioReady = true;
     }
+    this._wakeLock.request();
 
     // Auto-collapse HUD menu when user touches canvas
     this._collapseHud();
@@ -329,11 +334,12 @@ export class Game {
 
     const dismiss = () => {
       splash.classList.add('fade-out');
-      // Bootstrap audio
+      // Bootstrap audio & wake lock
       if (!this._audioReady) {
         this._world.audio.init();
         this._audioReady = true;
       }
+      this._wakeLock.request();
     };
 
     splash.addEventListener('pointerdown', dismiss, { once: true });
@@ -391,6 +397,32 @@ export class Game {
       this._timeScale = this._timeScale === 1.0 ? 0.5 : 1.0;
       btnZen.classList.toggle('active', this._timeScale < 1.0);
       this._vibrate(Config.HAPTICS?.TAP_LIGHT_MS || 8);
+    });
+
+    // Screen Wake Lock toggle button (Modo Vigília Contemplativa)
+    const btnWakeLock = document.getElementById('btn-wakelock');
+    const syncWakeLockUI = () => {
+      if (!btnWakeLock) return;
+      const isEnabled = this._wakeLock.isEnabled;
+      btnWakeLock.classList.toggle('active', isEnabled);
+      btnWakeLock.textContent = isEnabled ? '👁️' : '🌑';
+      btnWakeLock.title = isEnabled
+        ? 'Modo Vigília Ativo (Tela sempre acesa)'
+        : 'Modo Vigília Desativado (Tela suspende normalmente)';
+    };
+
+    this._wakeLock.onChange(syncWakeLockUI);
+    syncWakeLockUI();
+
+    btnWakeLock?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const enabled = await this._wakeLock.toggle();
+      this._vibrate(Config.HAPTICS?.TAP_LIGHT_MS || 8);
+      if (enabled) {
+        this._world.diary.add('👁️ Modo Vigília ativado: a tela permanecerá acesa para você contemplar o cosmos.');
+      } else {
+        this._world.diary.add('🌑 Modo Vigília desativado: a tela seguirá a suspensão padrão do celular.');
+      }
     });
 
     // Photo Wallpaper snapshot button
