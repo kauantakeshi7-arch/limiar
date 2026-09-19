@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="LIMIAR">
+  <meta name="theme-color" content="#0a0420">
+  <title>LIMIAR — Entre existir e desvanecer</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%230a0420'/><circle cx='50' cy='50' r='32' fill='%23f5d070'/><path d='M50,2 A48,48 0 0,1 50,98 A24,24 0 0,1 50,50 A24,24 0 0,0 50,2' fill='%236030c0'/></svg>">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%230a0420'/><circle cx='50' cy='50' r='32' fill='%23f5d070'/><path d='M50,2 A48,48 0 0,1 50,98 A24,24 0 0,1 50,50 A24,24 0 0,0 50,2' fill='%236030c0'/></svg>">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Main game canvas -->
+  <canvas id="canvas"></canvas>
+
+  <!-- ── Diary overlay ──────────────────────────────────────────── -->
+  <div id="diary" class="overlay hidden" role="dialog" aria-label="Diário">
+    <div class="overlay-inner">
+      <div class="overlay-header">
+        <h2>Diário</h2>
+        <button id="diary-close" class="close-btn" aria-label="Fechar">×</button>
+      </div>
+      <div id="diary-entries" class="scroll-area"></div>
+    </div>
+  </div>
+
+  <!-- ── Bestiary overlay ───────────────────────────────────────── -->
+  <div id="bestiary" class="overlay hidden" role="dialog" aria-label="Bestiário">
+    <div class="overlay-inner">
+      <div class="overlay-header">
+        <h2>Bestiário</h2>
+        <button id="bestiary-close" class="close-btn" aria-label="Fechar">×</button>
+      </div>
+      <div id="bestiary-entries" class="scroll-area bestiary-grid"></div>
+    </div>
+  </div>
+
+  <!-- ── HUD buttons ────────────────────────────────────────────── -->
+  <div id="hud" aria-label="Controles">
+    <button id="btn-diary"    class="hud-btn" title="Diário"    aria-label="Abrir Diário">📖</button>
+    <button id="btn-bestiary" class="hud-btn" title="Bestiário" aria-label="Abrir Bestiário">🦋</button>
+  </div>
+
+  <!-- ── Title splash (fades out after load) ────────────────────── -->
+  <div id="splash">
+    <div class="splash-inner">
+      <h1 class="splash-title">LIMIAR</h1>
+      <p class="splash-sub">Entre existir e desvanecer</p>
+      <p class="splash-hint">Toque para começar</p>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

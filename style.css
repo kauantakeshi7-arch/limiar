@@ -1,0 +1,456 @@
+/* ── Reset & base ─────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --color-light:       #f5d070;
+  --color-shadow:      #6030c0;
+  --color-hybrid:      #a060d0;
+  --color-transcend:   #ffffd0;
+  --color-bg-dark:     #0a0420;
+  --color-bg-light:    #fffff2;
+  --color-text:        rgba(220, 200, 255, 0.9);
+  --color-text-dim:    rgba(180, 160, 220, 0.55);
+  --color-overlay-bg:  rgba(8, 2, 22, 0.88);
+  --color-border:      rgba(160, 100, 255, 0.2);
+  --font-main:         'Georgia', 'Times New Roman', serif;
+  --font-ui:           system-ui, -apple-system, sans-serif;
+  --radius:            16px;
+  --transition:        0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-bg-dark);
+  font-family: var(--font-main);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  touch-action: none;              /* prevent browser gestures on canvas */
+  overscroll-behavior: none;        /* prevent pull-to-refresh & rubber-banding */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;      /* prevent callout sheet on long press */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Canvas ────────────────────────────────────────────────────────────── */
+#canvas {
+  display: block;
+  position: fixed;
+  inset: 0;
+  cursor: crosshair;
+}
+
+/* ── Splash screen ─────────────────────────────────────────────────────── */
+#splash {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  background: var(--color-bg-dark);
+  transition: opacity 1.2s ease, visibility 1.2s ease;
+  pointer-events: auto;
+}
+
+#splash.fade-out {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.splash-inner {
+  text-align: center;
+  animation: splash-appear 1.5s ease forwards;
+}
+
+.splash-title {
+  font-size: clamp(3rem, 12vw, 7rem);
+  font-weight: 300;
+  letter-spacing: 0.35em;
+  color: var(--color-transcend);
+  text-shadow:
+    0 0 40px rgba(255, 245, 150, 0.5),
+    0 0 80px rgba(255, 245, 150, 0.2);
+}
+
+.splash-sub {
+  margin-top: 0.75rem;
+  font-size: clamp(0.9rem, 3vw, 1.2rem);
+  letter-spacing: 0.2em;
+  color: var(--color-text-dim);
+  font-style: italic;
+}
+
+.splash-hint {
+  margin-top: 2.5rem;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  letter-spacing: 0.15em;
+  color: rgba(160, 130, 220, 0.5);
+  animation: pulse-hint 2.5s ease-in-out infinite;
+}
+
+@keyframes splash-appear {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes pulse-hint {
+  0%, 100% { opacity: 0.3; }
+  50%       { opacity: 0.8; }
+}
+
+/* ── HUD ───────────────────────────────────────────────────────────────── */
+#hud {
+  position: fixed;
+  bottom: max(24px, env(safe-area-inset-bottom, 24px));
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 50;
+}
+
+.hud-btn {
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(15, 5, 35, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--color-border);
+  font-size: 1.3rem;
+  cursor: pointer;
+  transition: transform var(--transition), background var(--transition), box-shadow var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 16px rgba(100, 40, 220, 0.2);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hud-btn:hover,
+.hud-btn:focus-visible {
+  background: rgba(30, 10, 60, 0.85);
+  transform: scale(1.08);
+  box-shadow: 0 4px 24px rgba(140, 60, 255, 0.35);
+  outline: none;
+}
+
+.hud-btn:active {
+  transform: scale(0.92);
+}
+
+/* ── Overlay (shared) ──────────────────────────────────────────────────── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: opacity var(--transition), visibility var(--transition);
+  padding: 0 0 env(safe-area-inset-bottom, 0);
+}
+
+.overlay.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.overlay-inner {
+  width: 100%;
+  max-width: 480px;
+  max-height: 60vh;
+  background: var(--color-overlay-bg);
+  border-radius: var(--radius) var(--radius) 0 0;
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 -8px 40px rgba(80, 20, 180, 0.3);
+  transform: translateY(0);
+  transition: transform var(--transition);
+}
+
+.overlay.hidden .overlay-inner {
+  transform: translateY(100%);
+}
+
+.overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.overlay-header h2 {
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: 0.25em;
+  color: var(--color-text);
+  text-transform: uppercase;
+}
+
+.close-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: rgba(255,255,255,0.05);
+  border-radius: 50%;
+  color: var(--color-text-dim);
+  font-size: 1.25rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition), color var(--transition);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.close-btn:hover { background: rgba(255,255,255,0.12); color: var(--color-text); }
+.close-btn:active { transform: scale(0.92); }
+
+.scroll-area {
+  overflow-y: auto;
+  padding: 16px 24px;
+  flex: 1;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(140, 80, 255, 0.3) transparent;
+}
+
+.scroll-area::-webkit-scrollbar { width: 4px; }
+.scroll-area::-webkit-scrollbar-track { background: transparent; }
+.scroll-area::-webkit-scrollbar-thumb { background: rgba(140, 80, 255, 0.3); border-radius: 2px; }
+
+/* ── Diary ─────────────────────────────────────────────────────────────── */
+.diary-entry {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(140, 80, 255, 0.08);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  opacity: 0;
+  transform: translateX(-8px);
+  animation: none;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.diary-entry:first-child { padding-top: 0; }
+
+/* Entries already in the DOM are visible */
+.diary-entry:not(.new) {
+  opacity: 1;
+  transform: none;
+}
+
+.diary-entry.new {
+  animation: diary-slide-in 0.5s ease forwards;
+}
+
+@keyframes diary-slide-in {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0);     }
+}
+
+.diary-time {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-dim);
+  font-family: var(--font-ui);
+  padding-top: 2px;
+  min-width: 32px;
+}
+
+.diary-text {
+  color: var(--color-text);
+}
+
+/* ── Bestiary ──────────────────────────────────────────────────────────── */
+.bestiary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.bestiary-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--color-border);
+  transition: all var(--transition);
+  font-size: 0.85rem;
+}
+
+.bestiary-entry.discovered {
+  background: rgba(120, 60, 220, 0.1);
+  border-color: rgba(160, 100, 255, 0.35);
+}
+
+.bestiary-entry.new {
+  animation: bestiary-reveal 0.6s ease forwards;
+}
+
+@keyframes bestiary-reveal {
+  0%   { transform: scale(0.9); opacity: 0; }
+  60%  { transform: scale(1.04); }
+  100% { transform: scale(1);   opacity: 1; }
+}
+
+.b-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+  width: 28px;
+  text-align: center;
+}
+
+.b-label {
+  line-height: 1.3;
+  color: var(--color-text);
+}
+
+.b-unknown {
+  color: var(--color-text-dim);
+  font-style: italic;
+  font-size: 0.78rem;
+}
+
+/* ── Accessibility ─────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Safe area padding & Mobile Responsive Adaptations ─────────────────── */
+#hud {
+  right: max(16px, env(safe-area-inset-right, 16px));
+  bottom: max(20px, env(safe-area-inset-bottom, 20px));
+}
+
+@media (max-width: 600px) {
+  #hud {
+    right: max(14px, env(safe-area-inset-right, 14px));
+    bottom: max(16px, env(safe-area-inset-bottom, 16px));
+    gap: 10px;
+  }
+
+  .hud-btn {
+    width: 50px;
+    height: 50px;
+    font-size: 1.4rem;
+    box-shadow: 0 4px 20px rgba(100, 40, 220, 0.35);
+  }
+
+  .overlay {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  .overlay-inner {
+    max-width: 100%;
+    max-height: 74vh;
+    border-radius: 22px 22px 0 0;
+  }
+
+  .overlay-header {
+    padding: 16px 20px 14px;
+  }
+
+  .overlay-header h2 {
+    font-size: 0.95rem;
+    letter-spacing: 0.2em;
+  }
+
+  .close-btn {
+    width: 38px;
+    height: 38px;
+    font-size: 1.35rem;
+  }
+
+  .scroll-area {
+    padding: 14px 20px;
+  }
+
+  .bestiary-grid {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px;
+  }
+
+  .bestiary-entry {
+    padding: 10px 12px;
+    font-size: 0.82rem;
+  }
+
+  .splash-title {
+    font-size: clamp(2.4rem, 13vw, 4.8rem);
+    letter-spacing: 0.28em;
+  }
+
+  .splash-sub {
+    font-size: clamp(0.85rem, 3.8vw, 1.05rem);
+    letter-spacing: 0.16em;
+  }
+
+  .splash-hint {
+    margin-top: 2rem;
+    font-size: 0.85rem;
+    padding: 8px 18px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    display: inline-block;
+    border: 1px solid rgba(160, 100, 255, 0.25);
+  }
+}
+
+/* Mobile landscape layout */
+@media (max-height: 520px) and (orientation: landscape) {
+  #hud {
+    right: max(12px, env(safe-area-inset-right, 12px));
+    bottom: max(10px, env(safe-area-inset-bottom, 10px));
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .hud-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 1.2rem;
+  }
+
+  .overlay-inner {
+    max-height: 86vh;
+  }
+
+  .overlay-header {
+    padding: 12px 18px 10px;
+  }
+
+  .scroll-area {
+    padding: 10px 18px;
+  }
+}

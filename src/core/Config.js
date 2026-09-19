@@ -1,0 +1,151 @@
+/**
+ * Config — Single source of truth for all game constants.
+ * Frozen to prevent accidental mutation at runtime.
+ */
+export const Config = Object.freeze({
+
+  // ── World ──────────────────────────────────────────────────────────────────
+  WORLD: Object.freeze({
+    INITIAL_CREATURES_PER_ZONE: 6,
+    MAX_CREATURES: 28,
+    MAX_CREATURES_PER_ZONE: 14,
+    /** Initial threshold position as a ratio of canvas height (0 = top). */
+    THRESHOLD_INITIAL_RATIO: 0.5,
+    /** Drag resistance: lower = heavier feel. */
+    THRESHOLD_RESISTANCE: 0.08,
+    /** Spring-back force when releasing threshold. */
+    THRESHOLD_SPRING: 0.04,
+    /** Thickness of the threshold zone (px) where creatures can become HYBRID. */
+    THRESHOLD_BAND: 20,
+  }),
+
+  // ── Zones ──────────────────────────────────────────────────────────────────
+  ZONE: Object.freeze({
+    LIGHT: 'light',
+    SHADOW: 'shadow',
+    THRESHOLD: 'threshold',
+  }),
+
+  // ── Creatures ─────────────────────────────────────────────────────────────
+  CREATURE: Object.freeze({
+    BASE_RADIUS: 16,
+    MIN_RADIUS: 8,
+    MAX_RADIUS: 38,
+    BASE_SPEED: 0.7,
+    MAX_SPEED: 2.2,
+    /** Number of blob anchor points around the creature. */
+    BLOB_POINTS: 10,
+    BLOB_NOISE_AMPLITUDE: 0.35,
+    BLOB_BREATHE_SPEED: 0.0008,
+    /** Unique syllable-based names (prefix + suffix). */
+    NAME_PREFIXES: ['Vel', 'Aes', 'Kro', 'Lim', 'Ner', 'Oth', 'Vex', 'Zar', 'Ium', 'Sol'],
+    NAME_SUFFIXES: ['-orn', '-ix', '-ara', '-oth', '-en', '-ius', '-ael', '-vel', '-um', '-as'],
+  }),
+
+  // ── Steering (Craig Reynolds) ─────────────────────────────────────────────
+  STEERING: Object.freeze({
+    WANDER_RADIUS: 60,
+    WANDER_DISTANCE: 100,
+    WANDER_JITTER: 0.4,
+    SEPARATION_RADIUS: 52,
+    SEPARATION_FORCE: 1.8,
+    ZONE_ATTRACTION_FORCE: 0.15,
+    THRESHOLD_AVOID_FORCE: 0.5,
+  }),
+
+  // ── Evolution & Transformation ────────────────────────────────────────────
+  EVOLUTION: Object.freeze({
+    /** Base time (ms) for full transformation in foreign zone. */
+    TRANSFORM_BASE_MS: 9000,
+    /** Base time (ms) before a crossing creature starts dissolving. */
+    DISSOLVE_DELAY_MS: 14000,
+    /** Probability to become HYBRID instead of TRANSFORMED (per transformation). */
+    HYBRID_CHANCE: 0.12,
+    /** Probability to TRANSCEND instead of DISSOLVE (per creature, per check). */
+    TRANSCENDENCE_CHANCE: 0.05,
+    /** How many times a creature must have crossed to gain the memory bonus. */
+    MEMORY_THRESHOLD: 1,
+    MEMORY_SPEED_BONUS: 1.4,
+  }),
+
+  // ── Interactions ──────────────────────────────────────────────────────────
+  INTERACTION: Object.freeze({
+    RADIUS: 55,
+    /** Min size ratio between two creatures for absorption to occur. */
+    ABSORPTION_RATIO: 1.65,
+    SYMBIOSIS_CHANCE: 0.07,
+    EXPLOSION_CHANCE: 0.25,
+    /** Spawn count from an explosion. */
+    EXPLOSION_SPAWN_COUNT: 2,
+    /** Cooldown (ms) between interactions for the same creature pair. */
+    COOLDOWN_MS: 3000,
+  }),
+
+  // ── Rare Events ───────────────────────────────────────────────────────────
+  RARE: Object.freeze({
+    /** Probability per frame of an eclipse starting. */
+    ECLIPSE_CHANCE: 0.00035,
+    ECLIPSE_DURATION_MS: 28000,
+    SINGULARITY_CHANCE: 0.00025,
+    SINGULARITY_DURATION_MS: 9000,
+    WITNESS_CHANCE: 0.0006,
+    WITNESS_DURATION_MS: 4000,
+    /** Creatures needed to trigger a chain crossing event. */
+    CHAIN_MIN_COUNT: 5,
+  }),
+
+  // ── Spawning ──────────────────────────────────────────────────────────────
+  SPAWN: Object.freeze({
+    INTERVAL_MS: 6000,
+    /** Creatures spawned per interval (one per zone). */
+    COUNT_PER_ZONE: 1,
+  }),
+
+  // ── Particles ─────────────────────────────────────────────────────────────
+  PARTICLES: Object.freeze({
+    POOL_SIZE: 400,
+    TRANSFORM_BURST: 12,
+    DISSOLVE_BURST: 18,
+    TRANSCEND_BURST: 30,
+    THRESHOLD_AMBIENT: 3,
+    LIFESPAN_MS: 1800,
+  }),
+
+  // ── Diary ─────────────────────────────────────────────────────────────────
+  DIARY: Object.freeze({
+    MAX_ENTRIES: 80,
+  }),
+
+  // ── Living Ecosystem & Poetic Interactions ────────────────────────────────
+  ECOSYSTEM: Object.freeze({
+    // Global Diurnal Breathing Tide
+    DIURNAL_PERIOD_MS: 100_000, // 100s full diurnal tide
+
+    // Sleep & Dreams
+    SLEEP_IDLE_MS: 24_000,      // time undisturbed before entering peaceful sleep
+    SLEEP_WAKE_DIST: 65,        // proximity to wake a sleeping creature
+    DREAM_INTERVAL_MS: 900,     // emission rate of dream motes while asleep
+
+    // Border Courtship Dance (Dança dos Opostos)
+    DANCE_DURATION_MS: 5_500,
+    DANCE_RADIUS: 65,
+    DANCE_MIN_AFFINITY: 0.45,
+
+    // Nectar Gifting
+    NECTAR_HOLD_MS: 600,        // finger hold duration to condense celestial nectar
+    NECTAR_ATTRACT_DIST: 240,   // detection radius for creatures
+    NECTAR_DURATION_MS: 10_000, // how long nectar persists if not fully eaten
+
+    // Threshold Living Flora
+    FLORA_COUNT: 24,            // reeds along the threshold membrane
+    FLORA_HEIGHT: 48,
+    FLORA_SPORE_CHANCE: 0.012,
+
+    // Harp Frequencies (Pentatonic D Major / Zen: D3, E3, G3, A3, B3, D4, E4, G4, A4, B4, D5)
+    HARP_NOTES: Object.freeze([
+      146.83, 164.81, 196.00, 220.00, 246.94,
+      293.66, 329.63, 392.00, 440.00, 493.88, 587.33,
+    ]),
+  }),
+
+});

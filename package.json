@@ -1,0 +1,12 @@
+{
+  "name": "limiar",
+  "version": "1.0.0",
+  "description": "LIMIAR — Entre existir e desvanecer. Um jogo contemplativo sobre dois mundos.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
