@@ -177,13 +177,7 @@ export class InteractionSystem {
   // ── Spatial grid ──────────────────────────────────────────────────────────
 
   _buildGrid(creatures) {
-    if (this._grid.size > 200) {
-      this._grid.clear();
-    } else {
-      for (const list of this._grid.values()) {
-        list.length = 0;
-      }
-    }
+    this._grid.clear();
     for (let i = 0; i < creatures.length; i++) {
       const c = creatures[i];
       if (!c.isAlive) continue;

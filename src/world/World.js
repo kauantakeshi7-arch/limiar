@@ -422,7 +422,8 @@ export class World {
 
     // Nearby conscious creatures notice and answer back in song
     let responderCount = 0;
-    for (const c of this.creatures) {
+    for (let i = 0; i < this.creatures.length; i++) {
+      const c = this.creatures[i];
       if (!c.isAlive) continue;
       const d = Math.hypot(c.position.x - px, c.position.y - py);
       if (d < call.maxRadius) {
@@ -430,9 +431,11 @@ export class World {
         c.curiosity = Math.min(1.0, c.curiosity + 0.35);
         c.expressThought(`${c.name} ouviu seu chamado cósmico`);
 
+        const mass = Math.pow(Math.max(0.6, c.radius / 14), 1.4);
+        const impulse = 0.35 / Math.sqrt(mass);
         const angle = Math.atan2(py - c.position.y, px - c.position.x);
-        c.velocity.x += Math.cos(angle) * 0.35;
-        c.velocity.y += Math.sin(angle) * 0.35;
+        c.velocity.x += Math.cos(angle) * impulse;
+        c.velocity.y += Math.sin(angle) * impulse;
 
         if (responderCount < 3 && Math.random() < 0.7) {
           const delay = 320 + responderCount * 280;
@@ -772,10 +775,23 @@ export class World {
       if (!this.season.lastBorealWave) this.season.lastBorealWave = now;
       if (now - this.season.lastBorealWave > 32_000 && this.creatures.length > 0) {
         this.season.lastBorealWave = now;
-        const living = this.creatures.filter(c => c.isAlive && !c.isSleeping);
-        if (living.length > 0) {
-          const initiator = living[Math.floor(Math.random() * living.length)];
-          initiator.emitLightWave(this.creatures, 0.65);
+        let livingCount = 0;
+        for (let i = 0; i < this.creatures.length; i++) {
+          const c = this.creatures[i];
+          if (c.isAlive && !c.isSleeping) livingCount++;
+        }
+        if (livingCount > 0) {
+          let pick = Math.floor(Math.random() * livingCount);
+          for (let i = 0; i < this.creatures.length; i++) {
+            const c = this.creatures[i];
+            if (c.isAlive && !c.isSleeping) {
+              if (pick === 0) {
+                c.emitLightWave(this.creatures, 0.65);
+                break;
+              }
+              pick--;
+            }
+          }
         }
       }
     }
@@ -913,7 +929,8 @@ export class World {
       }
 
       // Creatures can consume spores
-      for (const c of this.creatures) {
+      for (let j = 0; j < this.creatures.length; j++) {
+        const c = this.creatures[j];
         if (!c.isAlive) continue;
         const d = Math.hypot(c.position.x - spore.x, c.position.y - spore.y);
         if (d < c.radius + spore.radius + 6) {

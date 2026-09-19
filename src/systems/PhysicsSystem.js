@@ -33,6 +33,8 @@ export class PhysicsSystem {
   constructor(width, height) {
     this.width  = width;
     this.height = height;
+    this._processedSymbiotic = new Set();
+    this._processedDancing   = new Set();
   }
 
   onResize(width, height) {
@@ -99,14 +101,15 @@ export class PhysicsSystem {
       }
     }
 
-    this._updateSymbioticPairs(creatures, threshold, wind, dtC, time);
+    this._updateSymbioticPairs(creatures, threshold, wind, dtC, touchPoints, activeNectar, time, tide, reefs, vents, season);
     this._updateDancingPairs(creatures, dtC);
 
-    // Final boundary clamp and kinematics update guarantee for all alive entities
+    // Final boundary clamp, trail push, and kinematics update guarantee for all alive entities
     for (let i = 0; i < creatures.length; i++) {
       const creature = creatures[i];
       if (!creature.isAlive) continue;
       this._clampToBounds(creature);
+      creature.pushTrail();
       creature.updateKinematics(dtC, time, creatures);
     }
   }
@@ -236,7 +239,7 @@ export class PhysicsSystem {
       let closestDistSq = Infinity;
       for (let r = 0; r < reefs.length; r++) {
         const reef = reefs[r];
-        if (reef.zone === creature.zone || creature.state === CreatureState.TRANSCENDENT) {
+        if (reef.zone === creature.originZone || reef.zone === creature.zone || creature.state === CreatureState.TRANSCENDENT) {
           const rdx = reef.baseX - px;
           const rdy = reef.baseY - py;
           const dsq = rdx * rdx + rdy * rdy;
@@ -350,7 +353,7 @@ export class PhysicsSystem {
                  + ventY
                  + auroraY;
 
-    return new Vector2(steerX, steerY);
+    return { x: steerX, y: steerY };
   }
 
   // ── Individual behaviors ──────────────────────────────────────────────────
@@ -650,17 +653,16 @@ export class PhysicsSystem {
     creature.position.x += creature.velocity.x * (dt * 0.038);
     creature.position.y += creature.velocity.y * (dt * 0.038);
 
-    // Hard boundary guard: creatures can NEVER escape the visible world
-    this._clampToBounds(creature);
-    creature.pushTrail();
   }
 
   // ── Symbiotic pairs ───────────────────────────────────────────────────────
 
-  _updateSymbioticPairs(creatures, threshold, wind, dt) {
-    const processed = new Set();
+  _updateSymbioticPairs(creatures, threshold, wind, dt, touchPoints = [], activeNectar = null, now = 0, tide = null, reefs = [], vents = [], season = null) {
+    const processed = this._processedSymbiotic;
+    processed.clear();
 
-    for (const creature of creatures) {
+    for (let i = 0; i < creatures.length; i++) {
+      const creature = creatures[i];
       if (creature.state !== CreatureState.SYMBIOTIC) continue;
       if (!creature.bondedWith || processed.has(creature.id)) continue;
 
@@ -668,23 +670,25 @@ export class PhysicsSystem {
       processed.add(creature.id);
       processed.add(partner.id);
 
-      const steer = this._computeSteering(creature, creatures, threshold, wind);
-      this._integrate(creature, steer.scale(0.5), dt);
+      const steer = this._computeSteering(creature, creatures, threshold, wind, touchPoints, activeNectar, now, tide, reefs, vents, season);
+      this._integrate(creature, { x: steer.x * 0.5, y: steer.y * 0.5 }, dt, season);
 
-      const offset = Vector2.fromAngle(Date.now() * 0.001, creature.radius * 2.2);
-      partner.position = creature.position.add(offset);
-      partner.velocity = creature.velocity.clone();
-      this._clampToBounds(partner);
-      partner.pushTrail();
+      const offset = Vector2.fromAngle((now || Date.now()) * 0.001, creature.radius * 2.2);
+      partner.position.x = creature.position.x + offset.x;
+      partner.position.y = creature.position.y + offset.y;
+      partner.velocity.x = creature.velocity.x;
+      partner.velocity.y = creature.velocity.y;
     }
   }
 
   // ── Courtship dancing pairs ───────────────────────────────────────────────
 
   _updateDancingPairs(creatures, dt) {
-    const processed = new Set();
+    const processed = this._processedDancing;
+    processed.clear();
 
-    for (const creature of creatures) {
+    for (let i = 0; i < creatures.length; i++) {
+      const creature = creatures[i];
       if (!creature.isDancing || !creature.dancePartner || processed.has(creature.id)) continue;
       const partner = creature.dancePartner;
       if (!partner.isAlive) {
@@ -698,7 +702,8 @@ export class PhysicsSystem {
       partner.danceTimeLeft -= dt;
 
       if (creature.danceTimeLeft <= 0) {
-        const mid = creature.position.add(partner.position).scale(0.5);
+        const midX = (creature.position.x + partner.position.x) * 0.5;
+        const midY = (creature.position.y + partner.position.y) * 0.5;
         creature.endDance();
         partner.endDance();
         // Disperse with a gentle energy flash & boost
@@ -708,32 +713,34 @@ export class PhysicsSystem {
         globalBus.emit(Events.CREATURE_BORN, {
           parentA: creature,
           parentB: partner,
-          position: mid,
+          position: new Vector2(midX, midY),
         });
         continue;
       }
 
       // Mutual orbit around common center
-      const mid = creature.position.add(partner.position).scale(0.5);
+      const midX = (creature.position.x + partner.position.x) * 0.5;
+      const midY = (creature.position.y + partner.position.y) * 0.5;
       const orbitR = Math.max(20, (creature.radius + partner.radius) * 1.35);
 
       creature.danceAngle = (creature.danceAngle || 0) + dt * 0.0032;
       partner.danceAngle = creature.danceAngle + Math.PI;
 
-      const offsetC = Vector2.fromAngle(creature.danceAngle, orbitR);
-      const offsetP = Vector2.fromAngle(partner.danceAngle, orbitR);
+      const cosC = Math.cos(creature.danceAngle);
+      const sinC = Math.sin(creature.danceAngle);
+      const cosP = Math.cos(partner.danceAngle);
+      const sinP = Math.sin(partner.danceAngle);
 
-      creature.position = mid.add(offsetC);
-      partner.position = mid.add(offsetP);
+      creature.position.x = midX + cosC * orbitR;
+      creature.position.y = midY + sinC * orbitR;
+      partner.position.x = midX + cosP * orbitR;
+      partner.position.y = midY + sinP * orbitR;
 
-      creature.velocity = offsetC.perpendicular().normalize().scale(Config.CREATURE.BASE_SPEED * 0.65);
-      partner.velocity = offsetP.perpendicular().normalize().scale(Config.CREATURE.BASE_SPEED * 0.65);
-
-      this._clampToBounds(creature);
-      this._clampToBounds(partner);
-
-      creature.pushTrail();
-      partner.pushTrail();
+      const speed = Config.CREATURE.BASE_SPEED * 0.65;
+      creature.velocity.x = -sinC * speed;
+      creature.velocity.y = cosC * speed;
+      partner.velocity.x = -sinP * speed;
+      partner.velocity.y = cosP * speed;
     }
   }
 }

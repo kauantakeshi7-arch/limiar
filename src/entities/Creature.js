@@ -158,9 +158,12 @@ export class Creature {
 
     /** Pre-allocated chained vertebrae for Serpentine & tail of Manta */
     const maxSegs = 8;
+    const initSegSpacing = this.radius * 0.68;
+    const facingCos = Math.cos(this.facingAngle);
+    const facingSin = Math.sin(this.facingAngle);
     this.segments = Array.from({ length: maxSegs }, (_, i) => ({
-      x: position.x - i * 8,
-      y: position.y,
+      x: position.x - i * initSegSpacing * facingCos,
+      y: position.y - i * initSegSpacing * facingSin,
       angle: this.facingAngle,
       radius: this.radius * Math.max(0.25, 1 - (i / maxSegs) * 0.75),
     }));
@@ -315,14 +318,24 @@ export class Creature {
   /** Record current position into the trail history. Call once per frame. */
   pushTrail() {
     const maxLen = this.isAncestral ? (Config.ONTOGENY?.ANCESTRAL_TRAIL_LENGTH || 24) : 14;
-    const last   = this._trail[this._trail.length - 1];
-    if (last) {
-      const dx = this.position.x - last.x;
-      const dy = this.position.y - last.y;
+    const len    = this._trail.length;
+    if (len > 0) {
+      const last = this._trail[len - 1];
+      const dx   = this.position.x - last.x;
+      const dy   = this.position.y - last.y;
       if (dx * dx + dy * dy < this._trailMinDist * this._trailMinDist) return;
     }
-    this._trail.push({ x: this.position.x, y: this.position.y });
-    if (this._trail.length > maxLen) this._trail.shift();
+    if (len >= maxLen) {
+      const oldest = this._trail[0];
+      oldest.x = this.position.x;
+      oldest.y = this.position.y;
+      for (let i = 0; i < len - 1; i++) {
+        this._trail[i] = this._trail[i + 1];
+      }
+      this._trail[len - 1] = oldest;
+    } else {
+      this._trail.push({ x: this.position.x, y: this.position.y });
+    }
   }
 
   /** Read-only trail positions (oldest first). */
@@ -361,8 +374,20 @@ export class Creature {
 
       // During transformation: blend toward opposite style
       if (this.transformProgress > 0) {
-        const targetNoise = this.blobNoise[i] * (1 - this.transformProgress);
-        this.blobNoise[i] = this.blobNoise[i] * this.transformProgress + targetNoise;
+        let oppositeNoise = 0;
+        if (this.blobStyle === 'smooth') {
+          // Opposite is shadow/spiky
+          const spike = (i % 3 === 0) ? 1.6 : (i % 3 === 1) ? -0.4 : 0.9;
+          const oppPrimary   = Math.sin(time * this.dna.breatheSpeed * 1.8 + this.blobPhases[i]) * spike;
+          const oppSecondary = Math.sin(time * this.dna.breatheSpeed * 3.2 + this.blobPhases2[i]) * 0.5;
+          oppositeNoise = (oppPrimary + oppSecondary) * amp;
+        } else {
+          // Opposite is light/smooth
+          const oppPrimary   = Math.sin(time * this.dna.breatheSpeed + this.blobPhases[i]);
+          const oppSecondary = Math.sin(time * this.dna.breatheSpeed * 2.1 + this.blobPhases[i] * 1.3) * 0.3;
+          oppositeNoise = (oppPrimary + oppSecondary) * amp;
+        }
+        this.blobNoise[i] = this.blobNoise[i] * (1 - this.transformProgress) + oppositeNoise * this.transformProgress;
       }
     }
   }
