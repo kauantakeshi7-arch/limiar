@@ -358,7 +358,8 @@ export class World {
         c.expressThought(`${c.name} ouviu seu chamado cósmico`);
 
         const angle = Math.atan2(py - c.position.y, px - c.position.x);
-        c.velocity = c.velocity.add(new Vector2(Math.cos(angle) * 0.35, Math.sin(angle) * 0.35));
+        c.velocity.x += Math.cos(angle) * 0.35;
+        c.velocity.y += Math.sin(angle) * 0.35;
 
         if (responderCount < 3 && Math.random() < 0.7) {
           const delay = 320 + responderCount * 280;
@@ -435,7 +436,7 @@ export class World {
     const pad = Math.max(8, creature.radius * 0.8);
     const cx = Math.max(pad, Math.min(this._width - pad, creature.position.x));
     const cy = Math.max(pad, Math.min(this._height - pad, creature.position.y));
-    creature.position = new Vector2(cx, cy);
+    creature.position.set(cx, cy);
 
     this.creatures.push(creature);
     this.audio.addCreature(creature);

@@ -45,6 +45,48 @@ export class Vector2 {
     return m > maxLen ? this.scale(maxLen / m) : this;
   }
 
+  // ── High-Performance In-Place Operations (Zero-allocation) ────────────────
+
+  set(x, y) {
+    this.x = x;
+    this.y = y;
+    return this;
+  }
+
+  copy(v) {
+    this.x = v.x;
+    this.y = v.y;
+    return this;
+  }
+
+  addMut(v) {
+    this.x += v.x;
+    this.y += v.y;
+    return this;
+  }
+
+  subMut(v) {
+    this.x -= v.x;
+    this.y -= v.y;
+    return this;
+  }
+
+  scaleMut(s) {
+    this.x *= s;
+    this.y *= s;
+    return this;
+  }
+
+  clampMagnitudeMut(maxLen) {
+    const mSq = this.x * this.x + this.y * this.y;
+    if (mSq > maxLen * maxLen && mSq > 0) {
+      const s = maxLen / Math.sqrt(mSq);
+      this.x *= s;
+      this.y *= s;
+    }
+    return this;
+  }
+
   lerp(v, t) {
     return new Vector2(
       this.x + (v.x - this.x) * t,

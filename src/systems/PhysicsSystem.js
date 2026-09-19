@@ -56,24 +56,27 @@ export class PhysicsSystem {
   update(creatures, threshold, dt, wind, touchPoints = [], activeNectar = null, now = 0, tide = null, reefs = []) {
     const dtC  = Math.min(dt, 50);
     const time = now || performance.now();
-    const alive = creatures.filter(c => c.isAlive);
 
-    for (const creature of alive) {
+    for (let i = 0; i < creatures.length; i++) {
+      const creature = creatures[i];
+      if (!creature.isAlive) continue;
       if (creature.state === CreatureState.SYMBIOTIC && creature.bondedWith) continue;
       if (creature.state === CreatureState.WITNESS) continue;
       if (creature.isDancing) continue;
 
-      const steering = this._computeSteering(creature, alive, threshold, wind, touchPoints, activeNectar, time, tide, reefs);
+      const steering = this._computeSteering(creature, creatures, threshold, wind, touchPoints, activeNectar, time, tide, reefs);
       this._integrate(creature, steering, dtC);
     }
 
-    this._updateSymbioticPairs(alive, threshold, wind, dtC, time);
-    this._updateDancingPairs(alive, dtC);
+    this._updateSymbioticPairs(creatures, threshold, wind, dtC, time);
+    this._updateDancingPairs(creatures, dtC);
 
     // Final boundary clamp and kinematics update guarantee for all alive entities
-    for (const creature of alive) {
+    for (let i = 0; i < creatures.length; i++) {
+      const creature = creatures[i];
+      if (!creature.isAlive) continue;
       this._clampToBounds(creature);
-      creature.updateKinematics(dtC, time, alive);
+      creature.updateKinematics(dtC, time, creatures);
     }
   }
 
@@ -377,48 +380,49 @@ export class PhysicsSystem {
     };
   }
 
-  /** Zone attraction: gentle pull toward home zone center. */
+  /** Zone attraction: gentle pull toward home zone center (zero-allocation scalar math). */
   _zoneAttraction(creature, threshold) {
-    if (creature.state !== CreatureState.NATIVE) return Vector2.zero();
+    if (creature.state !== CreatureState.NATIVE) return { x: 0, y: 0 };
 
     const homeY = creature.originZone === Config.ZONE.LIGHT
       ? threshold.y * 0.45
       : threshold.y + (this.height - threshold.y) * 0.5;
 
-    const homeCenter = new Vector2(this.width / 2, homeY);
-    const toHome = homeCenter.sub(creature.position);
-    const dist = toHome.magnitude;
+    const dx = (this.width * 0.5) - creature.position.x;
+    const dy = homeY - creature.position.y;
+    const dist = Math.hypot(dx, dy);
 
-    if (dist < 70) return Vector2.zero();
-    return toHome.normalize().scale(Math.min(dist / 300, 1));
+    if (dist < 70) return { x: 0, y: 0 };
+    const scale = Math.min(dist / 300, 1) / dist;
+    return { x: dx * scale, y: dy * scale };
   }
 
-  /** Boundary: soft repulsion from canvas edges. */
+  /** Boundary: soft repulsion from canvas edges (zero-allocation scalar math). */
   _boundary(creature) {
     const { x, y } = creature.position;
     const margin = 40;
-    let force = Vector2.zero();
+    let fx = 0, fy = 0;
 
-    if (x < margin)               force = force.add(new Vector2((margin - x) / margin, 0));
-    if (x > this.width - margin)  force = force.add(new Vector2(-(x - (this.width - margin)) / margin, 0));
-    if (y < margin)               force = force.add(new Vector2(0, (margin - y) / margin));
-    if (y > this.height - margin) force = force.add(new Vector2(0, -(y - (this.height - margin)) / margin));
+    if (x < margin)               fx += (margin - x) / margin;
+    if (x > this.width - margin)  fx -= (x - (this.width - margin)) / margin;
+    if (y < margin)               fy += (margin - y) / margin;
+    if (y > this.height - margin) fy -= (y - (this.height - margin)) / margin;
 
-    return force;
+    return { x: fx, y: fy };
   }
 
-  /** Threshold avoidance: native creatures shy away from the line gently. */
+  /** Threshold avoidance: native creatures shy away from the line gently (zero-allocation scalar math). */
   _thresholdAvoidance(creature, threshold) {
-    if (creature.state !== CreatureState.NATIVE) return Vector2.zero();
+    if (creature.state !== CreatureState.NATIVE) return { x: 0, y: 0 };
 
     const distToThreshold = creature.position.y - threshold.y;
     const absD = Math.abs(distToThreshold);
     const avoidDist = this.width <= 600 ? 60 : 95;
-    if (absD > avoidDist) return Vector2.zero();
+    if (absD > avoidDist) return { x: 0, y: 0 };
 
     const direction = distToThreshold > 0 ? 1 : -1;
     const strength  = (1 - absD / avoidDist) * 0.50;
-    return new Vector2(0, direction * strength);
+    return { x: 0, y: direction * strength };
   }
 
   // ── Integration ───────────────────────────────────────────────────────────
@@ -444,7 +448,7 @@ export class PhysicsSystem {
       vy = -Math.abs(vy) * 0.6;
     }
 
-    creature.velocity = new Vector2(vx, vy);
+    creature.velocity.set(vx, vy);
   }
 
   _integrate(creature, steering, dt) {
@@ -487,12 +491,14 @@ export class PhysicsSystem {
     // Newton's Second Law: a = (F / m) * pulseThrust
     const accelScale = ((creature.isSleeping ? 0.015 : 0.040) / Math.sqrt(mass)) * dtFactor * pulseThrust;
 
-    creature.velocity = creature.velocity.scale(baseDrag)
-      .add(steering.scale(accelScale))
-      .clampMagnitude(Config.CREATURE.MAX_SPEED * currentSpeed);
+    creature.velocity.scaleMut(baseDrag);
+    creature.velocity.x += steering.x * accelScale;
+    creature.velocity.y += steering.y * accelScale;
+    creature.velocity.clampMagnitudeMut(Config.CREATURE.MAX_SPEED * currentSpeed);
 
-    // Calm, organic displacement scaled with frame delta
-    creature.position = creature.position.add(creature.velocity.scale(dt * 0.038));
+    // Calm, organic displacement scaled with frame delta (zero allocation)
+    creature.position.x += creature.velocity.x * (dt * 0.038);
+    creature.position.y += creature.velocity.y * (dt * 0.038);
 
     // Hard boundary guard: creatures can NEVER escape the visible world
     this._clampToBounds(creature);
