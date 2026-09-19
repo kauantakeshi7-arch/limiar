@@ -16,16 +16,28 @@ export class Bestiary {
       ['eclipse',     { label: 'Eclipse',               discovered: false, icon: '🌑', hint: '???' }],
       ['witness',     { label: 'Testemunha',            discovered: false, icon: '👁️', hint: '???' }],
       ['chain',       { label: 'Cadeia',                discovered: false, icon: '🔗', hint: '???' }],
+      // Morphological & Evolutionary discoveries
+      ['manta',       { label: 'Pipa Cósmica',          discovered: false, icon: '🪁', hint: 'Uma linhagem alada plana pelos céus.' }],
+      ['jellyfish',   { label: 'Medusa Abissal',        discovered: false, icon: '🪼', hint: 'Uma forma pulsante com tentáculos de luz.' }],
+      ['serpentine',  { label: 'Serpente do Limiar',    discovered: false, icon: '🐉', hint: 'Um ser articulado multi-segmentado.' }],
+      ['crystal',     { label: 'Radiolário Sagrado',    discovered: false, icon: '💎', hint: 'Uma geometria viva que refrata prismas.' }],
+      ['lineage',     { label: 'Nova Geração',          discovered: false, icon: '🌱', hint: 'Um filhote nascido da Dança dos Opostos.' }],
     ]);
 
     this._element = document.getElementById('bestiary-entries');
     this._renderAll();
   }
 
-  /** Register a creature's base form as discovered. */
+  /** Register a creature's base form and morphology as discovered. */
   registerCreature(creature) {
     const key = creature.originZone; // 'light' or 'shadow'
     this.unlock(key, creature);
+    if (creature.bodyPlan && creature.bodyPlan !== 'blob') {
+      this.unlock(creature.bodyPlan, creature);
+    }
+    if (creature.generation > 1) {
+      this.unlock('lineage', creature);
+    }
   }
 
   /**

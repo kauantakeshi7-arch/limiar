@@ -60,6 +60,7 @@ export class Vector2 {
 
   /** Angle in radians this vector points toward. */
   get angle() { return Math.atan2(this.y, this.x); }
+  heading() { return Math.atan2(this.y, this.x); }
 
   /** Return a perpendicular vector (rotated 90°). */
   perpendicular() { return new Vector2(-this.y, this.x); }

@@ -1,4 +1,5 @@
 import { Creature, CreatureState } from '../entities/Creature.js';
+import { DNA } from '../entities/DNA.js';
 import { Threshold } from './Threshold.js';
 import { ParticleSystem } from '../fx/ParticleSystem.js';
 import { AudioEngine } from '../fx/AudioEngine.js';
@@ -6,6 +7,7 @@ import { PhysicsSystem } from '../systems/PhysicsSystem.js';
 import { EvolutionSystem } from '../systems/EvolutionSystem.js';
 import { InteractionSystem } from '../systems/InteractionSystem.js';
 import { SpawnSystem } from '../systems/SpawnSystem.js';
+import { DecisionSystem } from '../systems/DecisionSystem.js';
 import { Diary } from '../ui/Diary.js';
 import { Bestiary } from '../ui/Bestiary.js';
 import { Config } from '../core/Config.js';
@@ -17,7 +19,7 @@ import { globalBus, Events } from '../core/EventEmitter.js';
  * World — The scene graph and systems orchestrator.
  *
  * Owns all entities and coordinates system execution order:
- *   Spawn → Threshold → Evolution → Physics → Interactions → Particles → Cleanup
+ *   Spawn → Threshold → Evolution → Decision (AI) → Physics → Interactions → Particles → Cleanup
  *
  * Does NOT render — that is the Renderer's job.
  * Does NOT handle raw input — that is the Game's job.
@@ -36,6 +38,7 @@ export class World {
     this.diary      = new Diary();
     this.bestiary   = new Bestiary();
 
+    this._decision    = new DecisionSystem();
     this._physics     = new PhysicsSystem(width, height);
     this._evolution   = new EvolutionSystem();
     this._interaction = new InteractionSystem();
@@ -107,6 +110,9 @@ export class World {
 
     // 4.5. Update sleep & dreams
     this._updateSleepAndDreams(now, dt);
+
+    // 4.8. Autonomous Cognitive AI: update drives, sensory perception, and conscious decisions
+    this._decision.update(this.creatures, this.threshold, touchPoints, this.activeNectar, dt, now);
 
     // 5. Physics: steering, movement, sleep damping, dance, nectar pull
     this._physics.update(this.creatures, this.threshold, dt, this.wind, touchPoints, this.activeNectar);
@@ -285,6 +291,7 @@ export class World {
       if (c.state !== CreatureState.TRANSFORMED) continue;
       const dissolveDelay = c.dna.resistance * 8000 + Config.EVOLUTION.DISSOLVE_DELAY_MS;
       if (now - c.crossingStartTime > dissolveDelay) {
+        c.experienceTrauma(0.5);
         this._evolution.beginDissolution(c);
       }
     }
@@ -319,7 +326,7 @@ export class World {
       const dy = c.position.y - this.activeNectar.y;
       const dist = Math.hypot(dx, dy);
       if (dist < c.radius + 18) {
-        c.feed();
+        c.consumeNectar(0.45);
         this.activeNectar.charges--;
         this.particles.emitNectarFeedBurst(this.activeNectar.x, this.activeNectar.y);
         this.audio.playNectarChime(this.activeNectar.x / this._width);
@@ -382,6 +389,35 @@ export class World {
     globalBus.on(Events.RARE_SINGULARITY,      c       => this.diary.add(`${c.name} cresceu infinitamente e desapareceu.`));
     globalBus.on(Events.RARE_WITNESS,          c       => this.diary.add(`👁️ ${c.name} parou. Por um momento, olhou para você.`));
     globalBus.on(Events.RARE_CHAIN,            cs      => this.diary.add(`Uma cadeia de ${cs.length} criaturas cruzou o limiar juntas.`));
+
+    // Autonomous Consciousness & Decisions
+    globalBus.on(Events.CREATURE_INQUISITIVE,  e       => this.diary.add(e.text));
+    globalBus.on(Events.CREATURE_CAUTIOUS,     e       => this.diary.add(e.text));
+    globalBus.on(Events.CREATURE_FORAGING,     e       => this.diary.add(e.text));
+    globalBus.on(Events.CREATURE_YEARNING,     e       => this.diary.add(e.text));
+
+    // Birth of new generation offspring from the sacred dance
+    globalBus.on(Events.CREATURE_BORN, ({ parentA, parentB, position }) => {
+      const childDna = DNA.crossover(parentA.dna, parentB.dna, 0.14, 0.22);
+      const childZone = Math.random() < 0.5 ? parentA.originZone : parentB.originZone;
+      const child = new Creature({
+        position: position.clone(),
+        zone: childZone,
+        dna: childDna,
+      });
+      child.generation = Math.max(parentA.generation || 1, parentB.generation || 1) + 1;
+      child.radius = Config.CREATURE.MIN_RADIUS * 1.15; // starts as a small juvenile
+      child.baseRadius = child.radius;
+      child.energy = 0.95;
+
+      this._addCreature(child);
+      this.particles.emitTransformBurst(position.x, position.y, child.color);
+      this.bestiary.registerCreature(child);
+
+      const genRomans = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+      const roman = genRomans[Math.min(9, child.generation - 1)] || child.generation;
+      this.diary.add(`🌱 Da dança sagrada de ${parentA.name} e ${parentB.name}, nasceu ${child.name} (Geração ${roman}).`);
+    });
 
     // Bestiary unlocks
     globalBus.on(Events.CREATURE_TRANSFORMED,  c       => this.bestiary.unlock('transformed', c));

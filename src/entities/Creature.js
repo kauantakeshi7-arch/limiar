@@ -107,8 +107,61 @@ export class Creature {
     this.danceTimeLeft = 0;
     this.danceAngle    = 0;
 
+    // ── Generation & Lineage ────────────────────────────────────────────────
+    this.generation = 1;
+
+    // ── Artificial Intelligence & Internal Drives ───────────────────────────
+    this.energy     = 0.8;                     // [0..1] Hunger/vitality drive
+    this.fear       = 0.0;                     // [0..1] Self-preservation urge
+    this.sociability = 0.2 + Random.float(0, 0.4); // [0..1] Desire for communion
+    this.curiosity  = this.dna.curiosity;       // [0..1] Urge to investigate ripples/touch
+    this.fatigue    = 0.05;                    // [0..1] Urge to sleep
+
+    /** Current conscious behavioral decision */
+    /** @type {'cruise'|'forage'|'flee'|'court'|'play'|'rest'} */
+    this.decision        = 'cruise';
+    this.decisionTarget  = null;
+    this.decisionTimer   = Random.float(0, 160); // staggered AI evaluation
+    this.decisionLockMs  = 0;
+
+    // ── Emotional Memory ────────────────────────────────────────────────────
+    this.membraneCaution = 0.0;                // Trauma/fear memory associated with crossing
+    /** @type {{x: number, y: number}|null} */
+    this.favoriteCoord   = null;               // Beloved coordinate with rich nutrients
+
+    // ── Morphological Skeleton & Articulation (Zero-allocation) ─────────────
+    this.facingAngle = this.velocity.heading();
+    this.wingPhase   = Random.float(0, Math.PI * 2);
+    this.pulsePhase  = Random.float(0, Math.PI * 2);
+
+    /** Pre-allocated chained vertebrae for Serpentine & tail of Manta */
+    const maxSegs = 8;
+    this.segments = Array.from({ length: maxSegs }, (_, i) => ({
+      x: position.x - i * 8,
+      y: position.y,
+      angle: this.facingAngle,
+      radius: this.radius * Math.max(0.25, 1 - (i / maxSegs) * 0.75),
+    }));
+
+    /** Pre-allocated tentacles for Jellyfish (up to 5 tentacles, each 5 joints) */
+    const maxTentacles = 5;
+    const jointsPerTentacle = 5;
+    this.tentacles = Array.from({ length: maxTentacles }, () =>
+      Array.from({ length: jointsPerTentacle }, () => ({
+        x: position.x,
+        y: position.y,
+        phase: Random.float(0, Math.PI * 2),
+      }))
+    );
+
     // ── Discovery ──────────────────────────────────────────────────────────
     this.discovered = false;
+  }
+
+  // ── Morphological & Behavioral Getters ────────────────────────────────────
+
+  get bodyPlan() {
+    return this.dna.bodyPlanType;
   }
 
   // ── Sleep & Dance Methods ──────────────────────────────────────────────────
@@ -200,13 +253,103 @@ export class Creature {
   }
 
   /**
-   * Consume an ambient energy particle — micro-growth and luminosity flash.
+   * Consume an ambient energy particle or nectar — micro-growth and vitality replenishment.
    */
   feed() {
+    this.energy = Math.min(1.0, this.energy + 0.08);
     this.metabolicFlash = 1.0;
     if (this.radius < Config.CREATURE.MAX_RADIUS) {
       this.radius = Math.min(Config.CREATURE.MAX_RADIUS, this.radius + 0.12);
       this.baseRadius = this.radius;
+    }
+  }
+
+  /**
+   * Feed on celestial nectar — rich energy, emotional attachment, and growth.
+   */
+  consumeNectar(amount = 0.45) {
+    this.energy = Math.min(1.0, this.energy + amount);
+    this.metabolicFlash = 1.0;
+    this.favoriteCoord = { x: this.position.x, y: this.position.y };
+    if (this.radius < Config.CREATURE.MAX_RADIUS) {
+      this.radius = Math.min(Config.CREATURE.MAX_RADIUS, this.radius + 0.4);
+      this.baseRadius = this.radius;
+    }
+  }
+
+  /**
+   * Record a harrowing near-dissolution or danger event into emotional memory.
+   */
+  experienceTrauma(amount = 0.35) {
+    this.membraneCaution = Math.min(1.0, this.membraneCaution + amount * (0.5 + this.dna.caution * 0.5));
+    this.fear = Math.min(1.0, this.fear + 0.65);
+  }
+
+  /**
+   * Advance continuous morphological kinematics (smooth orientation, wing flutter,
+   * jellyfish bell pulsing, and articulated Verlet chain segments).
+   * @param {number} dt
+   * @param {number} time
+   */
+  updateKinematics(dt, time) {
+    // 1. Smooth orientation facing
+    const speed = this.velocity.magnitude;
+    if (speed > 0.05) {
+      const targetAngle = this.velocity.heading();
+      let diff = targetAngle - this.facingAngle;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      while (diff > Math.PI)  diff -= Math.PI * 2;
+      this.facingAngle += diff * Math.min(1.0, 0.12 * (dt / 16));
+    }
+
+    // 2. Wing & bell oscillations
+    this.wingPhase += dt * this.dna.flutterRate;
+    this.pulsePhase += dt * (0.0022 + speed * 0.002);
+
+    // 3. Articulated segments (Verlet chain) for Serpentine & Manta tail
+    const numSegs = Math.min(this.segments.length, this.dna.segmentCount + 2);
+    this.segments[0].x = this.position.x;
+    this.segments[0].y = this.position.y;
+    this.segments[0].angle = this.facingAngle;
+    this.segments[0].radius = this.radius;
+
+    const segSpacing = this.radius * 0.68;
+    for (let i = 1; i < numSegs; i++) {
+      const prev = this.segments[i - 1];
+      const curr = this.segments[i];
+      const dx   = curr.x - prev.x;
+      const dy   = curr.y - prev.y;
+      const dist = Math.hypot(dx, dy) || 0.001;
+      const angle = Math.atan2(dy, dx);
+      curr.x = prev.x + (dx / dist) * segSpacing;
+      curr.y = prev.y + (dy / dist) * segSpacing;
+      curr.angle = angle;
+      curr.radius = this.radius * Math.max(0.2, 1 - (i / numSegs) * 0.7);
+    }
+
+    // 4. Trailing tentacles for Jellyfish
+    const numTentacles = this.dna.tentacleCount;
+    for (let t = 0; t < numTentacles; t++) {
+      const spread = (t / (numTentacles - 1 || 1) - 0.5) * 1.3;
+      const baseAngle = this.facingAngle + Math.PI + spread;
+      let prevX = this.position.x + Math.cos(baseAngle) * this.radius * 0.65;
+      let prevY = this.position.y + Math.sin(baseAngle) * this.radius * 0.65;
+      const tent = this.tentacles[t];
+
+      const jointSpacing = this.radius * 0.52;
+      for (let j = 0; j < tent.length; j++) {
+        const joint = tent[j];
+        const wave = Math.sin(time * 0.0032 + j * 0.7 + joint.phase) * (2.0 + j * 0.8);
+        const dx = joint.x - prevX;
+        const dy = joint.y - prevY;
+        const dist = Math.hypot(dx, dy) || 0.001;
+        const ang = Math.atan2(dy, dx);
+
+        joint.x = prevX + (dx / dist) * jointSpacing + Math.cos(ang + Math.PI / 2) * wave * 0.12;
+        joint.y = prevY + (dy / dist) * jointSpacing + Math.sin(ang + Math.PI / 2) * wave * 0.12;
+        prevX = joint.x;
+        prevY = joint.y;
+      }
     }
   }
 

@@ -2,6 +2,7 @@ import { Vector2 } from '../utils/Vector2.js';
 import { Random } from '../utils/Random.js';
 import { Config } from '../core/Config.js';
 import { CreatureState } from '../entities/Creature.js';
+import { globalBus, Events } from '../core/EventEmitter.js';
 
 /** Boids steering weights */
 const BOIDS = Object.freeze({
@@ -65,9 +66,10 @@ export class PhysicsSystem {
     this._updateSymbioticPairs(alive, threshold, wind, dtC);
     this._updateDancingPairs(alive, dtC);
 
-    // Final boundary clamp guarantee for all alive entities
+    // Final boundary clamp and kinematics update guarantee for all alive entities
     for (const creature of alive) {
       this._clampToBounds(creature);
+      creature.updateKinematics(dtC, performance.now());
     }
   }
 
@@ -126,6 +128,37 @@ export class PhysicsSystem {
       }
     }
 
+    // Conscious AI Decision steering
+    let decisionX = 0, decisionY = 0;
+    if (creature.decisionTarget && creature.decision !== 'cruise') {
+      const tx = creature.decisionTarget.x ?? creature.decisionTarget.position?.x ?? px;
+      const ty = creature.decisionTarget.y ?? creature.decisionTarget.position?.y ?? py;
+      const tdx = tx - px;
+      const tdy = ty - py;
+      const tDist = Math.hypot(tdx, tdy) || 1;
+      const invT = 1 / tDist;
+
+      if (creature.decision === 'flee') {
+        // Steer strongly away from threat or dangerous threshold
+        decisionX -= tdx * invT * 3.4;
+        decisionY -= tdy * invT * 3.4;
+      } else if (creature.decision === 'forage') {
+        // Steer purposefully toward food / nectar
+        decisionX += tdx * invT * 2.8;
+        decisionY += tdy * invT * 2.8;
+      } else if (creature.decision === 'court') {
+        // Steer gently toward opposite dance partner
+        decisionX += tdx * invT * 2.0;
+        decisionY += tdy * invT * 2.0;
+      } else if (creature.decision === 'play') {
+        // Inquisitive circling around player's touch
+        const tangentX = -tdy * invT;
+        const tangentY = tdx * invT;
+        decisionX += (tdx * invT * 1.4) + (tangentX * 0.85);
+        decisionY += (tdy * invT * 1.4) + (tangentY * 0.85);
+      }
+    }
+
     // Combine all steering forces into scalar accumulators (only 1 Vector2 allocated)
     const steerX = wander.x * BOIDS.WANDER
                  + flock.sepX * BOIDS.SEPARATION
@@ -136,7 +169,8 @@ export class PhysicsSystem {
                  + threshAv.x * BOIDS.THRESHOLD_AVOID
                  + (wind?.x || 0) * BOIDS.WIND
                  + touchX
-                 + nectarX;
+                 + nectarX
+                 + decisionX;
 
     const steerY = wander.y * BOIDS.WANDER
                  + flock.sepY * BOIDS.SEPARATION
@@ -147,7 +181,8 @@ export class PhysicsSystem {
                  + threshAv.y * BOIDS.THRESHOLD_AVOID
                  + (wind?.y || 0) * BOIDS.WIND
                  + touchY
-                 + nectarY;
+                 + nectarY
+                 + decisionY;
 
     return new Vector2(steerX, steerY);
   }
@@ -408,11 +443,18 @@ export class PhysicsSystem {
       partner.danceTimeLeft -= dt;
 
       if (creature.danceTimeLeft <= 0) {
+        const mid = creature.position.add(partner.position).scale(0.5);
         creature.endDance();
         partner.endDance();
         // Disperse with a gentle energy flash & boost
         creature.metabolicFlash = 1.0;
         partner.metabolicFlash = 1.0;
+        // Birth of a new generation offspring from the sacred dance
+        globalBus.emit(Events.CREATURE_BORN, {
+          parentA: creature,
+          parentB: partner,
+          position: mid,
+        });
         continue;
       }
 

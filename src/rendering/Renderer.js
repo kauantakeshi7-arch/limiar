@@ -1092,20 +1092,38 @@ export class Renderer {
       ctx.shadowColor = creature.color.toGlowHSLA(0.5);
       ctx.shadowBlur  = this._glowFor(creature, now, breath);
 
-      // Blob fill with radial gradient
-      ctx.beginPath();
-      this._blobPath(ctx, pts);
-      ctx.fillStyle = this._creatureGrad(ctx, creature);
-      ctx.fill();
+      // Morphological body plan rendering
+      switch (creature.bodyPlan) {
+        case Config.BODY_PLAN.MANTA:
+          this._drawManta(ctx, creature, now, breath);
+          break;
+        case Config.BODY_PLAN.JELLYFISH:
+          this._drawJellyfish(ctx, creature, now, breath);
+          break;
+        case Config.BODY_PLAN.SERPENTINE:
+          this._drawSerpentine(ctx, creature, now, breath);
+          break;
+        case Config.BODY_PLAN.CRYSTAL:
+          this._drawCrystal(ctx, creature, now, breath);
+          break;
+        case Config.BODY_PLAN.BLOB:
+        default:
+          ctx.beginPath();
+          this._blobPath(ctx, pts);
+          ctx.fillStyle = this._creatureGrad(ctx, creature);
+          ctx.fill();
 
-      // Rim
-      ctx.strokeStyle = creature.color.toGlowHSLAWithAlpha(0.3, 0.4);
-      ctx.lineWidth   = 0.8;
-      ctx.shadowBlur  = 0;
-      ctx.stroke();
+          ctx.strokeStyle = creature.color.toGlowHSLAWithAlpha(0.3, 0.4);
+          ctx.lineWidth   = 0.8;
+          ctx.shadowBlur  = 0;
+          ctx.stroke();
 
-      // Specular highlight
-      this._drawSpecular(ctx, creature);
+          this._drawSpecular(ctx, creature);
+          break;
+      }
+
+      // Conscious Sensory Organelles / Gaze
+      this._drawSensoryGaze(ctx, creature, now);
 
       // Orbital motes (DNA echo gene)
       this._drawOrbitalMotes(ctx, creature, now);
@@ -1246,6 +1264,303 @@ export class Renderer {
     grad.addColorStop(0.6, creature.color.toHSLA());
     grad.addColorStop(1,   creature.color.toOuterHSLA());
     return grad;
+  }
+
+  _creatureGradLocal(ctx, creature, r) {
+    const g = ctx.createRadialGradient(-r * 0.2, -r * 0.2, 0, 0, 0, r * 1.25);
+    const intensity = creature.state === CreatureState.TRANSCENDENT ? 1 : 0.5;
+    g.addColorStop(0,   creature.color.toGlowHSLAWithAlpha(intensity, 0.95));
+    g.addColorStop(0.6, creature.color.toHSLA());
+    g.addColorStop(1,   creature.color.toOuterHSLA());
+    return g;
+  }
+
+  // ── Morphological Plan 1: Manta (Pipa Cósmica) ────────────────────────────
+  _drawManta(ctx, creature, now, breath) {
+    const px = creature.position.x;
+    const py = creature.position.y;
+    const r  = creature.radius;
+    const angle = creature.facingAngle;
+    const flutter = Math.sin(creature.wingPhase) * (r * 0.36);
+
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(angle);
+
+    // 1. Mantle Wings Path
+    ctx.beginPath();
+    ctx.moveTo(r * 1.25, 0); // Head rostrum
+    ctx.bezierCurveTo(r * 0.6, -r * 0.8, -r * 0.1, -r * 1.5 - flutter, -r * 0.35, -r * 1.65 - flutter); // Left wing tip
+    ctx.quadraticCurveTo(-r * 0.25, -r * 0.85, -r * 0.95, 0); // Left trailing edge to tail base
+    ctx.quadraticCurveTo(-r * 0.25, r * 0.85, -r * 0.35, r * 1.65 + flutter); // Right trailing edge
+    ctx.bezierCurveTo(-r * 0.1, r * 1.5 + flutter, r * 0.6, r * 0.8, r * 1.25, 0); // Right wing tip
+    ctx.closePath();
+
+    ctx.fillStyle = this._creatureGradLocal(ctx, creature, r);
+    ctx.fill();
+
+    ctx.strokeStyle = creature.color.toGlowHSLAWithAlpha(0.3, 0.45);
+    ctx.lineWidth = 0.9;
+    ctx.stroke();
+
+    // Wing spine veins
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-r * 0.35, -r * 1.65 - flutter);
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-r * 0.35, r * 1.65 + flutter);
+    ctx.strokeStyle = creature.color.toGlowHSLAWithAlpha(0.4, 0.25);
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+
+    ctx.restore();
+
+    // 2. Trailing Filament Tail (in world coords using creature.segments)
+    const segs = creature.segments;
+    if (segs && segs.length > 2) {
+      ctx.beginPath();
+      ctx.moveTo(segs[0].x, segs[0].y);
+      for (let i = 1; i < segs.length; i++) {
+        ctx.lineTo(segs[i].x, segs[i].y);
+      }
+      ctx.strokeStyle = creature.color.toGlowHSLAWithAlpha(0.4, 0.45);
+      ctx.lineWidth = 1.0;
+      ctx.stroke();
+
+      // Glowing tip on filament tail
+      const tailTip = segs[segs.length - 1];
+      ctx.beginPath();
+      ctx.arc(tailTip.x, tailTip.y, 2.2, 0, Math.PI * 2);
+      ctx.fillStyle = creature.color.toGlowHSLA(0.85);
+      ctx.shadowColor = creature.color.toGlowHSLA(0.9);
+      ctx.shadowBlur = 8;
+      ctx.fill();
+    }
+  }
+
+  // ── Morphological Plan 2: Jellyfish (Medusa Abissal) ──────────────────────
+  _drawJellyfish(ctx, creature, now, breath) {
+    const px = creature.position.x;
+    const py = creature.position.y;
+    const r  = creature.radius;
+    const angle = creature.facingAngle;
+    const pulse = 0.5 + 0.5 * Math.sin(creature.pulsePhase);
+    const squishX = 1.0 + pulse * 0.22;
+    const squishY = 1.0 - pulse * 0.16;
+
+    // 1. Trailing articulated tentacles in world coordinates
+    const tentacles = creature.tentacles;
+    const numT = creature.dna.tentacleCount;
+    for (let t = 0; t < numT && t < tentacles.length; t++) {
+      const joints = tentacles[t];
+      ctx.beginPath();
+      ctx.moveTo(joints[0].x, joints[0].y);
+      for (let j = 1; j < joints.length; j++) {
+        const prev = joints[j - 1];
+        const curr = joints[j];
+        ctx.quadraticCurveTo(prev.x, prev.y, (prev.x + curr.x) / 2, (prev.y + curr.y) / 2);
+      }
+      ctx.lineTo(joints[joints.length - 1].x, joints[joints.length - 1].y);
+      ctx.strokeStyle = creature.color.toGlowHSLAWithAlpha(0.25, 0.4);
+      ctx.lineWidth = 0.85;
+      ctx.stroke();
+
+      // Bioluminescent terminal node
+      const last = joints[joints.length - 1];
+      ctx.beginPath();
+      ctx.arc(last.x, last.y, 1.8, 0, Math.PI * 2);
+      ctx.fillStyle = creature.color.toGlowHSLA(0.8);
+      ctx.shadowColor = creature.color.toGlowHSLA(0.85);
+      ctx.shadowBlur = 6;
+      ctx.fill();
+    }
+
+    // 2. Pulsing Umbrella Bell
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(angle);
+    ctx.scale(squishX, squishY);
+
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.55, -r * 0.95);
+    ctx.bezierCurveTo(r * 0.4, -r * 1.1, r * 1.25, -r * 0.55, r * 1.25, 0);
+    ctx.bezierCurveTo(r * 1.25, r * 0.55, r * 0.4, r * 1.1, -r * 0.55, r * 0.95);
+    // Scalloped margin at the base
+    ctx.quadraticCurveTo(-r * 0.35, r * 0.45, -r * 0.5, 0);
+    ctx.quadraticCurveTo(-r * 0.35, -r * 0.45, -r * 0.55, -r * 0.95);
+    ctx.closePath();
+
+    ctx.fillStyle = this._creatureGradLocal(ctx, creature, r);
+    ctx.fill();
+
+    ctx.strokeStyle = creature.color.toGlowHSLAWithAlpha(0.35, 0.5);
+    ctx.lineWidth = 0.9;
+    ctx.stroke();
+
+    // Internal gastric cavity / luminous core
+    ctx.beginPath();
+    ctx.arc(r * 0.25, 0, r * 0.32, 0, Math.PI * 2);
+    ctx.fillStyle = creature.color.toGlowHSLAWithAlpha(0.5, 0.35);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  // ── Morphological Plan 3: Serpentine (Serpente do Limiar) ─────────────────
+  _drawSerpentine(ctx, creature, now, breath) {
+    const segs = creature.segments;
+    const numSegs = Math.min(segs.length, creature.dna.segmentCount + 2);
+
+    // 1. Translucent dorsal fin connecting the spine
+    if (numSegs > 2) {
+      ctx.beginPath();
+      ctx.moveTo(segs[0].x, segs[0].y);
+      for (let i = 1; i < numSegs; i++) {
+        const s = segs[i];
+        const normalAng = s.angle + Math.PI / 2;
+        const finWave = Math.sin(now * 0.005 + i * 0.9) * (s.radius * 0.4);
+        const fx = s.x + Math.cos(normalAng) * (s.radius * 0.7 + finWave);
+        const fy = s.y + Math.sin(normalAng) * (s.radius * 0.7 + finWave);
+        ctx.lineTo(fx, fy);
+      }
+      for (let i = numSegs - 1; i >= 0; i--) {
+        ctx.lineTo(segs[i].x, segs[i].y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = creature.color.toGlowHSLAWithAlpha(0.2, 0.18);
+      ctx.fill();
+    }
+
+    // 2. Chained vertebrae segments (drawn from tail to head)
+    for (let i = numSegs - 1; i >= 0; i--) {
+      const s = segs[i];
+      const r = Math.max(1.5, s.radius);
+      ctx.save();
+      ctx.translate(s.x, s.y);
+      ctx.rotate(s.angle);
+
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * (i === 0 ? 1.25 : 1.05), r * 0.85, 0, 0, Math.PI * 2);
+      ctx.fillStyle = this._creatureGradLocal(ctx, creature, r);
+      ctx.fill();
+
+      ctx.strokeStyle = creature.color.toGlowHSLAWithAlpha(0.3, 0.4);
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      ctx.restore();
+    }
+  }
+
+  // ── Morphological Plan 4: Crystal (Radiolário Sagrado) ────────────────────
+  _drawCrystal(ctx, creature, now, breath) {
+    const px = creature.position.x;
+    const py = creature.position.y;
+    const r  = creature.radius;
+    const spin = now * 0.0014;
+    const numPoints = creature.dna.segmentCount >= 4 ? 6 : 4;
+
+    ctx.save();
+    ctx.translate(px, py);
+
+    // 1. Faceted Outer Polygon
+    ctx.rotate(spin);
+    ctx.beginPath();
+    for (let i = 0; i < numPoints; i++) {
+      const ang = (i / numPoints) * Math.PI * 2;
+      const x = Math.cos(ang) * r * 1.15;
+      const y = Math.sin(ang) * r * 1.15;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = this._creatureGradLocal(ctx, creature, r);
+    ctx.fill();
+    ctx.strokeStyle = creature.color.toGlowHSLAWithAlpha(0.5, 0.6);
+    ctx.lineWidth = 1.0;
+    ctx.stroke();
+
+    // Internal facet refractions
+    ctx.beginPath();
+    for (let i = 0; i < numPoints; i++) {
+      const ang = (i / numPoints) * Math.PI * 2;
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(ang) * r * 1.15, Math.sin(ang) * r * 1.15);
+    }
+    ctx.strokeStyle = creature.color.toGlowHSLAWithAlpha(0.35, 0.35);
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+
+    // 2. Counter-rotating inner crystal core
+    ctx.rotate(-spin * 2.2);
+    ctx.beginPath();
+    const innerPoints = 3;
+    for (let i = 0; i < innerPoints; i++) {
+      const ang = (i / innerPoints) * Math.PI * 2;
+      const ix = Math.cos(ang) * r * 0.5;
+      const iy = Math.sin(ang) * r * 0.5;
+      if (i === 0) ctx.moveTo(ix, iy);
+      else ctx.lineTo(ix, iy);
+    }
+    ctx.closePath();
+    ctx.fillStyle = creature.color.toGlowHSLAWithAlpha(0.6, 0.5);
+    ctx.shadowColor = creature.color.toGlowHSLA(0.8);
+    ctx.shadowBlur = 10;
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  // ── Conscious Sensory Gaze / Ocelli ───────────────────────────────────────
+  _drawSensoryGaze(ctx, creature, now) {
+    const r = creature.radius;
+    const angle = creature.facingAngle;
+    const px = creature.position.x;
+    const py = creature.position.y;
+
+    // Inquisitive look direction offset (tracks player touch if playing)
+    let lookOffset = 0;
+    if (creature.decision === 'play' && creature.decisionTarget) {
+      const targetAngle = Math.atan2(creature.decisionTarget.y - py, creature.decisionTarget.x - px);
+      lookOffset = Math.sin(targetAngle - angle) * 0.35;
+    }
+
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(angle);
+
+    const eyeForward = r * 0.42;
+    const eyeSpread  = r * 0.32;
+    const eyeR       = Math.max(1.2, r * 0.12);
+
+    // Left and Right Ocelli
+    const eyes = [
+      { x: eyeForward, y: -eyeSpread + lookOffset * r * 0.2 },
+      { x: eyeForward, y:  eyeSpread + lookOffset * r * 0.2 },
+    ];
+
+    for (const e of eyes) {
+      // Glow socket
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, eyeR, 0, Math.PI * 2);
+      ctx.fillStyle = creature.originZone === Config.ZONE.LIGHT
+        ? 'rgba(255, 255, 230, 0.95)'
+        : 'rgba(230, 210, 255, 0.95)';
+      ctx.shadowColor = ctx.fillStyle;
+      ctx.shadowBlur = 6;
+      ctx.fill();
+
+      // Pupil point
+      ctx.beginPath();
+      ctx.arc(e.x + eyeR * 0.35, e.y, eyeR * 0.45, 0, Math.PI * 2);
+      ctx.fillStyle = creature.originZone === Config.ZONE.LIGHT
+        ? 'rgba(120, 60, 10, 0.8)'
+        : 'rgba(50, 10, 80, 0.8)';
+      ctx.shadowBlur = 0;
+      ctx.fill();
+    }
+
+    ctx.restore();
   }
 
   _blobPath(ctx, pts) {

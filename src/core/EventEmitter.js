@@ -105,4 +105,11 @@ export const Events = Object.freeze({
   WHISPER:                 'player:whisper',
   BUBBLE:                  'player:bubble',
   NECTAR_SPAWNED:          'player:nectar',
+
+  // Consciousness & AI
+  CREATURE_INQUISITIVE:    'creature:inquisitive',
+  CREATURE_CAUTIOUS:       'creature:cautious',
+  CREATURE_FORAGING:       'creature:foraging',
+  CREATURE_YEARNING:       'creature:yearning',
+  CREATURE_BORN:           'creature:born',
 });

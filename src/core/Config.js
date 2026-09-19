@@ -148,4 +148,24 @@ export const Config = Object.freeze({
     ]),
   }),
 
+  // ── Morphological Body Plans ──────────────────────────────────────────────
+  BODY_PLAN: Object.freeze({
+    BLOB:       'blob',       // Ancestral fluid amoeba
+    MANTA:      'manta',      // Winged ray gliding on currents
+    JELLYFISH:  'jellyfish',  // Pulsing bell with trailing articulated tentacles
+    SERPENTINE: 'serpentine', // Multi-segment chained body
+    CRYSTAL:    'crystal',    // Faceted geometric polyhedron with prism spines
+  }),
+
+  // ── Artificial Intelligence & Drives ──────────────────────────────────────
+  AI: Object.freeze({
+    DECISION_INTERVAL_MS: 160,  // Re-evaluation frequency for utility AI
+    VISION_RANGE: 190,          // Sensory perception radius
+    VISION_CONE_RAD: Math.PI * 0.75, // ~135 degrees forward cone
+    DRIVE_DECAY_RATE: 0.0001,
+    HUNGER_RATE: 0.00015,
+    FATIGUE_RATE: 0.00008,
+    MEMORY_RETENTION: 0.998,    // Emotional memory decay
+  }),
+
 });
