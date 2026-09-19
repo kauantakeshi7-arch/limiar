@@ -186,7 +186,7 @@ export class EvolutionSystem {
       const dl = Math.abs(tgt.l - cur.l);
       const da = Math.abs(tgt.a - cur.a);
       if (dh > 0.15 || ds > 0.15 || dl > 0.15 || da > 0.003) {
-        creature.color = cur.lerp(tgt, lerpSpeed);
+        cur.lerpMut(tgt, lerpSpeed);
       }
     }
   }

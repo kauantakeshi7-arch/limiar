@@ -20,6 +20,17 @@ import { Random } from '../utils/Random.js';
  *   12. Eclipse overlay + moon
  *   13. Post-process: bloom pass + vignette
  */
+
+// Pre-allocated static aurora layer definitions (zero allocations in hot render loop)
+const AURORA_LAYERS = Object.freeze([
+  // 1. Mint emerald
+  { r: 16, g: 185, b: 129, color2: 'rgba(52, 211, 153, 0)', speed: 0.0006, freq: 0.0045, ampRatio: 0.4, phase: 0.0 },
+  // 2. Turquoise
+  { r: 45, g: 212, b: 191, color2: 'rgba(20, 184, 166, 0)', speed: 0.0008, freq: 0.0060, ampRatio: 0.35, phase: 1.8 },
+  // 3. Electric cyan
+  { r: 56, g: 189, b: 248, color2: 'rgba(14, 165, 233, 0)', speed: 0.0005, freq: 0.0035, ampRatio: 0.45, phase: 3.5 },
+]);
+
 export class Renderer {
   /** @param {HTMLCanvasElement} canvas */
   constructor(canvas) {
@@ -751,31 +762,25 @@ export class Renderer {
       auroraAlpha = 0.35 + season.blend * 0.30;
     }
 
-    const layers = [
-      // 1. Mint emerald
-      { color1: 'rgba(16, 185, 129, 0.45)', color2: 'rgba(52, 211, 153, 0)', speed: 0.0006, freq: 0.0045, amp: auroraH * 0.4, phase: 0.0 },
-      // 2. Turquoise
-      { color1: 'rgba(45, 212, 191, 0.40)', color2: 'rgba(20, 184, 166, 0)', speed: 0.0008, freq: 0.0060, amp: auroraH * 0.35, phase: 1.8 },
-      // 3. Electric cyan
-      { color1: 'rgba(56, 189, 248, 0.35)', color2: 'rgba(14, 165, 233, 0)', speed: 0.0005, freq: 0.0035, amp: auroraH * 0.45, phase: 3.5 },
-    ];
-
+    const a0 = (auroraAlpha * 0.65).toFixed(3);
+    const a1 = (auroraAlpha * 0.35).toFixed(3);
     const windShift = (wind?.x || 0) * 15;
 
-    for (let l = 0; l < layers.length; l++) {
-      const layer = layers[l];
+    for (let l = 0; l < AURORA_LAYERS.length; l++) {
+      const layer = AURORA_LAYERS[l];
       const grad = ctx.createLinearGradient(0, 0, 0, auroraH * 1.35);
-      grad.addColorStop(0, layer.color1.replace(/[\d.]+\)$/, `${(auroraAlpha * 0.65).toFixed(3)})`));
-      grad.addColorStop(0.55, layer.color1.replace(/[\d.]+\)$/, `${(auroraAlpha * 0.35).toFixed(3)})`));
+      grad.addColorStop(0, `rgba(${layer.r}, ${layer.g}, ${layer.b}, ${a0})`);
+      grad.addColorStop(0.55, `rgba(${layer.r}, ${layer.g}, ${layer.b}, ${a1})`);
       grad.addColorStop(1, layer.color2);
 
       ctx.beginPath();
       ctx.moveTo(0, 0);
 
+      const amp = auroraH * layer.ampRatio;
       const step = Math.max(16, Math.floor(w / 36));
       for (let x = 0; x <= w + step; x += step) {
-        const wave = Math.sin(now * layer.speed + x * layer.freq + layer.phase) * layer.amp
-                   + Math.cos(now * layer.speed * 0.7 + x * layer.freq * 1.5) * (layer.amp * 0.35);
+        const wave = Math.sin(now * layer.speed + x * layer.freq + layer.phase) * amp
+                   + Math.cos(now * layer.speed * 0.7 + x * layer.freq * 1.5) * (amp * 0.35);
         const y = Math.max(10, (auroraH * 0.75) + wave + windShift);
         ctx.lineTo(x, y);
       }

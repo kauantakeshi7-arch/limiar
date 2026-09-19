@@ -64,7 +64,7 @@ export class Creature {
     this._cachedBlobPoints = Array.from({ length: Config.CREATURE.BLOB_POINTS }, () => ({ x: 0, y: 0 }));
 
     // ── Visuals ─────────────────────────────────────────────────────────────
-    this.color       = Creature._baseColorForZone(zone);
+    this.color       = Creature._baseColorForZone(zone).clone();
     this.targetColor = this.color.clone();
 
     // ── Motion trail ─────────────────────────────────────────────────────────
@@ -639,23 +639,25 @@ export class Creature {
   refreshTargetColor() {
     switch (this.state) {
       case CreatureState.NATIVE:
-        this.targetColor = Creature._baseColorForZone(this.originZone);
+        this.targetColor.copy(Creature._baseColorForZone(this.originZone));
         break;
-      case CreatureState.CROSSING:
-        this.targetColor = Creature._baseColorForZone(this.originZone)
-          .lerp(Creature._baseColorForZone(this._foreignZone), this.transformProgress);
+      case CreatureState.CROSSING: {
+        const baseHome = Creature._baseColorForZone(this.originZone);
+        const baseForeign = Creature._baseColorForZone(this._foreignZone);
+        this.targetColor.copy(baseHome).lerpMut(baseForeign, this.transformProgress);
         break;
+      }
       case CreatureState.TRANSFORMED:
-        this.targetColor = Creature._baseColorForZone(this._foreignZone);
+        this.targetColor.copy(Creature._baseColorForZone(this._foreignZone));
         break;
       case CreatureState.HYBRID:
-        this.targetColor = Color.hybrid();
+        this.targetColor.copy(Color.HYBRID);
         break;
       case CreatureState.TRANSCENDENT:
-        this.targetColor = Color.transcendent(this.originZone);
+        this.targetColor.copy(this.originZone === Config.ZONE.SHADOW ? Color.TRANSCENDENT_SHADOW : Color.TRANSCENDENT_LIGHT);
         break;
       case CreatureState.DISSOLVING:
-        this.targetColor = this.color.withAlpha(Math.max(0, this.color.a - 0.008));
+        this.targetColor.set(this.color.h, this.color.s, this.color.l, Math.max(0, this.color.a - 0.008));
         break;
     }
   }
@@ -681,7 +683,7 @@ export class Creature {
   }
 
   static _baseColorForZone(zone) {
-    return zone === Config.ZONE.LIGHT ? Color.light() : Color.shadow();
+    return zone === Config.ZONE.LIGHT ? Color.LIGHT : Color.SHADOW;
   }
 
   static _generateName() {

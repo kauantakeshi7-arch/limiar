@@ -278,7 +278,8 @@ export class World {
 
     // 8. Sync audio to creature positions, seasons & adaptive atmosphere
     this.audio.update(now, this.diurnalFactor, this.creatures, this.season);
-    for (const c of this.creatures) {
+    for (let i = 0; i < this.creatures.length; i++) {
+      const c = this.creatures[i];
       if (c.isAlive) this.audio.updateCreaturePosition(c, this._width, this._height, this.threshold.y);
     }
 
@@ -548,7 +549,8 @@ export class World {
   }
 
   _checkDissolutionTimeout(now) {
-    for (const c of this.creatures) {
+    for (let i = 0; i < this.creatures.length; i++) {
+      const c = this.creatures[i];
       if (!c.isAlive) continue;
       if (c.state !== CreatureState.TRANSFORMED) continue;
       const dissolveDelay = c.dna.resistance * 8000 + Config.EVOLUTION.DISSOLVE_DELAY_MS;
@@ -562,7 +564,8 @@ export class World {
   _closestCreatureTo(x, y, maxRadius) {
     let closest = null;
     let minDist  = maxRadius;
-    for (const c of this.creatures) {
+    for (let i = 0; i < this.creatures.length; i++) {
+      const c = this.creatures[i];
       if (!c.isAlive) continue;
       const dist = Math.hypot(c.position.x - x, c.position.y - y);
       if (dist < minDist) {
@@ -582,7 +585,8 @@ export class World {
     }
 
     // Creature feeding check
-    for (const c of this.creatures) {
+    for (let i = 0; i < this.creatures.length; i++) {
+      const c = this.creatures[i];
       if (!c.isAlive) continue;
       const dx = c.position.x - this.activeNectar.x;
       const dy = c.position.y - this.activeNectar.y;
@@ -605,7 +609,8 @@ export class World {
     const idleReq = Config.ECOSYSTEM?.SLEEP_IDLE_MS || 24000;
     const dreamInterval = Config.ECOSYSTEM?.DREAM_INTERVAL_MS || 900;
 
-    for (const c of this.creatures) {
+    for (let i = 0; i < this.creatures.length; i++) {
+      const c = this.creatures[i];
       if (!c.isAlive) continue;
 
       if (c.isSleeping) {
@@ -705,7 +710,8 @@ export class World {
       }
 
       // Rest & Sanctuary regeneration for nearby creatures
-      for (const c of this.creatures) {
+      for (let cIdx = 0; cIdx < this.creatures.length; cIdx++) {
+        const c = this.creatures[cIdx];
         if (!c.isAlive) continue;
         const d = Math.hypot(c.position.x - reef.baseX, c.position.y - reef.baseY);
         if (d < (Config.SANCTUARIES?.REST_ATTRACT_RADIUS || 140)) {

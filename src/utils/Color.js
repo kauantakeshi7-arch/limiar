@@ -43,6 +43,22 @@ export class Color {
     return `hsla(${Math.round(this.h)}, ${Math.round(this.s)}%, ${l}%, ${this.a < 1 ? (this.a <= 0 ? 0 : this.a.toFixed(3)) : 1})`;
   }
 
+  set(h, s, l, a = 1) {
+    this.h = h;
+    this.s = s;
+    this.l = l;
+    this.a = a;
+    return this;
+  }
+
+  copy(other) {
+    this.h = other.h;
+    this.s = other.s;
+    this.l = other.l;
+    this.a = other.a;
+    return this;
+  }
+
   withAlpha(a) { return new Color(this.h, this.s, this.l, a); }
   withLightness(l) { return new Color(this.h, this.s, l, this.a); }
   withSaturation(s) { return new Color(this.h, s, this.l, this.a); }
@@ -50,7 +66,7 @@ export class Color {
   // ── Blending ──────────────────────────────────────────────────────────────
 
   /**
-   * Linearly interpolate toward another Color.
+   * Linearly interpolate toward another Color (creates a new Color).
    * @param {Color} to
    * @param {number} t - 0 = this, 1 = to
    */
@@ -69,6 +85,23 @@ export class Color {
   }
 
   /**
+   * In-place linear interpolation toward another Color (zero-allocation).
+   * @param {Color} to
+   * @param {number} t - 0 = this, 1 = to
+   */
+  lerpMut(to, t) {
+    let dh = to.h - this.h;
+    if (dh > 180) dh -= 360;
+    if (dh < -180) dh += 360;
+
+    this.h = (this.h + dh * t + 360) % 360;
+    this.s += (to.s - this.s) * t;
+    this.l += (to.l - this.l) * t;
+    this.a += (to.a - this.a) * t;
+    return this;
+  }
+
+  /**
    * Mix this color with a target by ratio, then adjust lightness and saturation.
    * Used for glow / emission effects.
    */
@@ -79,22 +112,29 @@ export class Color {
   clone() { return new Color(this.h, this.s, this.l, this.a); }
   toString() { return this.toHSLA(); }
 
+  // ── Shared Immutable Color Instances (Zero-allocation) ────────────────────
+  static LIGHT = Object.freeze(new Color(45, 85, 72));
+  static SHADOW = Object.freeze(new Color(275, 88, 62));
+  static HYBRID = Object.freeze(new Color(290, 75, 60));
+  static TRANSCENDENT_LIGHT = Object.freeze(new Color(48, 100, 85));
+  static TRANSCENDENT_SHADOW = Object.freeze(new Color(282, 95, 80));
+
   // ── Factories ─────────────────────────────────────────────────────────────
 
   /** Light-zone creature color: warm radiant golden */
-  static light() { return new Color(45, 85, 72); }
+  static light() { return Color.LIGHT.clone(); }
 
   /** Shadow-zone creature color: vibrant bioluminescent royal amethyst */
-  static shadow() { return new Color(275, 88, 62); }
+  static shadow() { return Color.SHADOW.clone(); }
 
   /** Hybrid creature: luminous violet-gold midpoint */
-  static hybrid() { return new Color(290, 75, 60); }
+  static hybrid() { return Color.HYBRID.clone(); }
 
   /** Transcendent: brilliant aura respecting origin heritage */
   static transcendent(zone = 'light') {
     return zone === 'shadow'
-      ? new Color(282, 95, 80)   // Radiant cosmic plasma violet
-      : new Color(48, 100, 85);  // Radiant solar celestial gold
+      ? Color.TRANSCENDENT_SHADOW.clone()
+      : Color.TRANSCENDENT_LIGHT.clone();
   }
 
   /** Particle colors */
