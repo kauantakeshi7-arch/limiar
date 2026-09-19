@@ -54,6 +54,7 @@ export class Game {
   start() {
     this._world.init();
     this._running = true;
+    this._lastTime = performance.now();
     this._rafId   = requestAnimationFrame(ts => this._loop(ts));
   }
 
@@ -72,19 +73,27 @@ export class Game {
     this._rafId = requestAnimationFrame(ts => this._loop(ts));
 
     try {
-      const dt = Math.min(timestamp - this._lastTime, 80); // cap at 80ms to avoid spiral of death
+      if (!this._lastTime) this._lastTime = timestamp;
+      const rawDt = timestamp - this._lastTime;
       this._lastTime = timestamp;
 
-      // Collect continuous active touch points + recent disturbance ripples
+      // Zen Anti-Spike: cap dt at 33.3ms (never allow lag spikes to slingshot creatures)
+      const dt = Math.max(1, Math.min(rawDt, 33.3));
+
+      // Collect active touches + unique ripples without stacking forces
       const activeTouches = Array.from(this._activePointers.values());
       const freshRipples  = this._ripples
-        .filter(r => timestamp - r.startTime < 600)
+        .filter(r => timestamp - r.startTime < 450)
         .map(r => ({ x: r.x, y: r.y }));
-      const touchDisturbances = [...activeTouches, ...freshRipples];
 
-      if (dt > 0) {
-        this._world.update(timestamp, dt, touchDisturbances);
+      const touchDisturbances = [...activeTouches];
+      for (let i = 0; i < freshRipples.length; i++) {
+        const rip = freshRipples[i];
+        const nearActive = activeTouches.some(t => Math.hypot(t.x - rip.x, t.y - rip.y) < 28);
+        if (!nearActive) touchDisturbances.push(rip);
       }
+
+      this._world.update(timestamp, dt, touchDisturbances);
 
       // Check hold-to-condense celestial nectar
       if (this._holdStartPos && !this._nectarSpawned) {

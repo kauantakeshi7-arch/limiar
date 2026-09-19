@@ -46,15 +46,16 @@ export class SpawnSystem {
       else if (c.originZone === Config.ZONE.SHADOW) shadowCount++;
     }
 
-    const maxPerZone = Config.WORLD.MAX_CREATURES_PER_ZONE || 14;
-    const minPerZone = 6;
+    const isMobile = this._width <= 600;
+    const maxPerZone = isMobile ? 4 : (Config.WORLD.MAX_CREATURES_PER_ZONE || 8);
+    const minPerZone = isMobile ? 2 : 3;
 
     // Check if either zone is critically under-represented
     const lightUnder  = lightCount < minPerZone;
     const shadowUnder = shadowCount < minPerZone;
 
-    // Accelerated replenishing if either population dips below healthy minimum
-    const interval = (lightUnder || shadowUnder) ? 1800 : Config.SPAWN.INTERVAL_MS;
+    // Gentle replenishing without rushing
+    const interval = (lightUnder || shadowUnder) ? 4000 : (isMobile ? 12000 : Config.SPAWN.INTERVAL_MS);
     const elapsed  = now - this._lastSpawnTime;
     if (elapsed < interval) return [];
 
@@ -103,7 +104,8 @@ export class SpawnSystem {
    */
   spawnInitial(threshold) {
     const creatures = [];
-    const n = Config.WORLD.INITIAL_CREATURES_PER_ZONE || 6;
+    const isMobile = this._width <= 600;
+    const n = isMobile ? 2 : (Config.WORLD.INITIAL_CREATURES_PER_ZONE || 4);
 
     for (let i = 0; i < n; i++) {
       creatures.push(this._createCreature(Config.ZONE.LIGHT, threshold));

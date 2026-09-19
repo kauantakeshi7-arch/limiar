@@ -299,7 +299,7 @@ export class Creature {
       let diff = targetAngle - this.facingAngle;
       while (diff < -Math.PI) diff += Math.PI * 2;
       while (diff > Math.PI)  diff -= Math.PI * 2;
-      this.facingAngle += diff * Math.min(1.0, 0.12 * (dt / 16));
+      this.facingAngle += diff * Math.min(0.20, 0.055 * (dt / 16));
     }
 
     // 2. Wing & bell oscillations

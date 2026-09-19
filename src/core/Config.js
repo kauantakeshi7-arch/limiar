@@ -6,9 +6,9 @@ export const Config = Object.freeze({
 
   // ── World ──────────────────────────────────────────────────────────────────
   WORLD: Object.freeze({
-    INITIAL_CREATURES_PER_ZONE: 6,
-    MAX_CREATURES: 28,
-    MAX_CREATURES_PER_ZONE: 14,
+    INITIAL_CREATURES_PER_ZONE: 4,
+    MAX_CREATURES: 16,
+    MAX_CREATURES_PER_ZONE: 8,
     /** Initial threshold position as a ratio of canvas height (0 = top). */
     THRESHOLD_INITIAL_RATIO: 0.5,
     /** Drag resistance: lower = heavier feel. */
@@ -28,15 +28,15 @@ export const Config = Object.freeze({
 
   // ── Creatures ─────────────────────────────────────────────────────────────
   CREATURE: Object.freeze({
-    BASE_RADIUS: 16,
+    BASE_RADIUS: 15,
     MIN_RADIUS: 8,
-    MAX_RADIUS: 38,
-    BASE_SPEED: 0.7,
-    MAX_SPEED: 2.2,
+    MAX_RADIUS: 34,
+    BASE_SPEED: 0.40, // Gentle, serene cruising speed (prevents frantic darting)
+    MAX_SPEED: 1.20,  // Soft ceiling to guarantee peace and fluidity
     /** Number of blob anchor points around the creature. */
     BLOB_POINTS: 10,
-    BLOB_NOISE_AMPLITUDE: 0.35,
-    BLOB_BREATHE_SPEED: 0.0008,
+    BLOB_NOISE_AMPLITUDE: 0.30,
+    BLOB_BREATHE_SPEED: 0.0007,
     /** Unique syllable-based names (prefix + suffix). */
     NAME_PREFIXES: ['Vel', 'Aes', 'Kro', 'Lim', 'Ner', 'Oth', 'Vex', 'Zar', 'Ium', 'Sol'],
     NAME_SUFFIXES: ['-orn', '-ix', '-ara', '-oth', '-en', '-ius', '-ael', '-vel', '-um', '-as'],
@@ -44,13 +44,13 @@ export const Config = Object.freeze({
 
   // ── Steering (Craig Reynolds) ─────────────────────────────────────────────
   STEERING: Object.freeze({
-    WANDER_RADIUS: 60,
-    WANDER_DISTANCE: 100,
-    WANDER_JITTER: 0.4,
-    SEPARATION_RADIUS: 52,
-    SEPARATION_FORCE: 1.8,
-    ZONE_ATTRACTION_FORCE: 0.15,
-    THRESHOLD_AVOID_FORCE: 0.5,
+    WANDER_RADIUS: 50,
+    WANDER_DISTANCE: 80,
+    WANDER_JITTER: 0.20,
+    SEPARATION_RADIUS: 40,
+    SEPARATION_FORCE: 1.1,
+    ZONE_ATTRACTION_FORCE: 0.12,
+    THRESHOLD_AVOID_FORCE: 0.32,
   }),
 
   // ── Evolution & Transformation ────────────────────────────────────────────
@@ -159,13 +159,13 @@ export const Config = Object.freeze({
 
   // ── Artificial Intelligence & Drives ──────────────────────────────────────
   AI: Object.freeze({
-    DECISION_INTERVAL_MS: 160,  // Re-evaluation frequency for utility AI
-    VISION_RANGE: 190,          // Sensory perception radius
-    VISION_CONE_RAD: Math.PI * 0.75, // ~135 degrees forward cone
-    DRIVE_DECAY_RATE: 0.0001,
-    HUNGER_RATE: 0.00015,
-    FATIGUE_RATE: 0.00008,
-    MEMORY_RETENTION: 0.998,    // Emotional memory decay
+    DECISION_INTERVAL_MS: 340,  // Staggered, calm decision cadence (was 160)
+    VISION_RANGE: 155,          // Harmonious sensory radius (was 190)
+    VISION_CONE_RAD: Math.PI * 0.70, // ~126 degrees forward cone
+    DRIVE_DECAY_RATE: 0.00005,
+    HUNGER_RATE: 0.00006,       // Serene hunger depletion
+    FATIGUE_RATE: 0.00003,      // Gentle fatigue
+    MEMORY_RETENTION: 0.9992,   // Long-lasting emotional memory
   }),
 
 });

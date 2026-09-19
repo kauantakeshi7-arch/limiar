@@ -82,37 +82,38 @@ export class PhysicsSystem {
     const boundary = this._boundary(creature);
     const threshAv = this._thresholdAvoidance(creature, threshold);
 
-    // Dynamic reaction to player touch (inlined scalar math)
+    // Dynamic reaction to player touch (gentle, poetic reaction without chaos)
     let touchX = 0, touchY = 0;
     const px = creature.position.x;
     const py = creature.position.y;
+    const maxTouchDist = this.width <= 600 ? 95 : 120;
 
-    for (let i = 0; i < touchPoints.length; i++) {
+    for (let i = 0; i < Math.min(touchPoints.length, 3); i++) {
       const pt = touchPoints[i];
       const dx = pt.x - px;
       const dy = pt.y - py;
       const distSq = dx * dx + dy * dy;
-      if (distSq < 16900 && distSq > 1) { // 130px radius
+      if (distSq < maxTouchDist * maxTouchDist && distSq > 4) {
         const dist = Math.sqrt(distSq);
-        const factor = (1 - dist / 130) * (1 - dist / 130);
+        const factor = (1 - dist / maxTouchDist);
         const invD = 1 / dist;
         if (creature.dna.adaptation > 0.52) {
-          touchX += dx * invD * (factor * 1.3);
-          touchY += dy * invD * (factor * 1.3);
+          touchX += dx * invD * (factor * 0.70);
+          touchY += dy * invD * (factor * 0.70);
         } else {
-          touchX -= dx * invD * (factor * 2.4);
-          touchY -= dy * invD * (factor * 2.4);
+          touchX -= dx * invD * (factor * 0.90);
+          touchY -= dy * invD * (factor * 0.90);
         }
-        if (creature.isSleeping && factor > 0.2) {
+        if (creature.isSleeping && factor > 0.35) {
           creature.wake();
         }
       }
     }
 
-    // Attraction to celestial nectar droplet (inlined scalar math)
+    // Attraction to celestial nectar droplet (gentle homing drift)
     let nectarX = 0, nectarY = 0;
     if (activeNectar && activeNectar.life > 0) {
-      const attractRadius = Config.ECOSYSTEM?.NECTAR_ATTRACT_DIST || 240;
+      const attractRadius = Config.ECOSYSTEM?.NECTAR_ATTRACT_DIST || 200;
       const dx = activeNectar.x - px;
       const dy = activeNectar.y - py;
       const distSq = dx * dx + dy * dy;
@@ -120,15 +121,15 @@ export class PhysicsSystem {
         const dist = Math.sqrt(distSq);
         const factor = 1 - dist / attractRadius;
         const invD = 1 / dist;
-        nectarX = dx * invD * (factor * 3.2);
-        nectarY = dy * invD * (factor * 3.2);
-        if (creature.isSleeping && factor > 0.3) {
+        nectarX = dx * invD * (factor * 1.25);
+        nectarY = dy * invD * (factor * 1.25);
+        if (creature.isSleeping && factor > 0.4) {
           creature.wake();
         }
       }
     }
 
-    // Conscious AI Decision steering
+    // Conscious AI Decision steering (calm, organic impulses)
     let decisionX = 0, decisionY = 0;
     if (creature.decisionTarget && creature.decision !== 'cruise') {
       const tx = creature.decisionTarget.x ?? creature.decisionTarget.position?.x ?? px;
@@ -139,23 +140,23 @@ export class PhysicsSystem {
       const invT = 1 / tDist;
 
       if (creature.decision === 'flee') {
-        // Steer strongly away from threat or dangerous threshold
-        decisionX -= tdx * invT * 3.4;
-        decisionY -= tdy * invT * 3.4;
+        // Calm retreat from threat or dangerous threshold
+        decisionX -= tdx * invT * 1.15;
+        decisionY -= tdy * invT * 1.15;
       } else if (creature.decision === 'forage') {
-        // Steer purposefully toward food / nectar
-        decisionX += tdx * invT * 2.8;
-        decisionY += tdy * invT * 2.8;
+        // Purposeful yet gentle swim toward food / nectar
+        decisionX += tdx * invT * 0.95;
+        decisionY += tdy * invT * 0.95;
       } else if (creature.decision === 'court') {
-        // Steer gently toward opposite dance partner
-        decisionX += tdx * invT * 2.0;
-        decisionY += tdy * invT * 2.0;
+        // Serene approach toward opposite dance partner
+        decisionX += tdx * invT * 0.80;
+        decisionY += tdy * invT * 0.80;
       } else if (creature.decision === 'play') {
         // Inquisitive circling around player's touch
         const tangentX = -tdy * invT;
         const tangentY = tdx * invT;
-        decisionX += (tdx * invT * 1.4) + (tangentX * 0.85);
-        decisionY += (tdy * invT * 1.4) + (tangentY * 0.85);
+        decisionX += (tdx * invT * 0.60) + (tangentX * 0.40);
+        decisionY += (tdy * invT * 0.60) + (tangentY * 0.40);
       }
     }
 
@@ -226,7 +227,8 @@ export class PhysicsSystem {
    * Eliminates redundant distance calculations, intermediate vector allocations, and reduces loops by 66%.
    */
   _flocking(creature, allCreatures) {
-    const sepRadius = Config.STEERING.SEPARATION_RADIUS;
+    const isMobile = this.width <= 600;
+    const sepRadius = isMobile ? 32 : Config.STEERING.SEPARATION_RADIUS;
     const cohRadius = BOIDS.COHESION_RADIUS;
     const alignRadius = BOIDS.ALIGNMENT_RADIUS;
 
@@ -345,16 +347,17 @@ export class PhysicsSystem {
     return force;
   }
 
-  /** Threshold avoidance: native creatures shy away from the line. */
+  /** Threshold avoidance: native creatures shy away from the line gently. */
   _thresholdAvoidance(creature, threshold) {
     if (creature.state !== CreatureState.NATIVE) return Vector2.zero();
 
     const distToThreshold = creature.position.y - threshold.y;
     const absD = Math.abs(distToThreshold);
-    if (absD > 120) return Vector2.zero();
+    const avoidDist = this.width <= 600 ? 60 : 95;
+    if (absD > avoidDist) return Vector2.zero();
 
     const direction = distToThreshold > 0 ? 1 : -1;
-    const strength  = 1 - absD / 120;
+    const strength  = (1 - absD / avoidDist) * 0.50;
     return new Vector2(0, direction * strength);
   }
 
@@ -385,15 +388,24 @@ export class PhysicsSystem {
   }
 
   _integrate(creature, steering, dt) {
-    let speed = Config.CREATURE.BASE_SPEED * (0.7 + creature.dna.adaptation * 0.6);
+    const isMobile = this.width <= 600;
+    let speed = Config.CREATURE.BASE_SPEED * (0.7 + creature.dna.adaptation * 0.5);
+    if (isMobile) speed *= 0.85; // Extra serene pace on mobile
     if (creature.isSleeping) {
       speed *= 0.22; // serene sleeping drift
     }
-    creature.velocity = creature.velocity
-      .add(steering.scale(creature.isSleeping ? 0.03 : 0.1))
+
+    // Viscous hydrodynamic damping (drag): natural graceful decay to serene resting glide
+    const drag = creature.isSleeping ? 0.94 : 0.965;
+    const dtFactor = Math.min(dt / 16, 2.0);
+    const accelScale = (creature.isSleeping ? 0.015 : 0.040) * dtFactor;
+
+    creature.velocity = creature.velocity.scale(drag)
+      .add(steering.scale(accelScale))
       .clampMagnitude(Config.CREATURE.MAX_SPEED * speed);
 
-    creature.position = creature.position.add(creature.velocity.scale(dt * 0.05));
+    // Calm, organic displacement scaled with frame delta
+    creature.position = creature.position.add(creature.velocity.scale(dt * 0.038));
 
     // Hard boundary guard: creatures can NEVER escape the visible world
     this._clampToBounds(creature);

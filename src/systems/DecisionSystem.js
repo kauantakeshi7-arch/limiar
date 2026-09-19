@@ -95,7 +95,7 @@ export class DecisionSystem {
     // Zone tension increases fear if creature is crossing and fragile
     if (creature.state === CreatureState.CROSSING) {
       const danger = 1 - creature.dna.resistance;
-      creature.fear = Math.min(1, creature.fear + danger * 0.0008 * dt);
+      creature.fear = Math.min(1, creature.fear + danger * 0.0003 * dt);
     }
   }
 
@@ -242,7 +242,7 @@ export class DecisionSystem {
         creature.decisionTarget = senses.closestThreat
           ? { x: senses.closestThreat.position.x, y: senses.closestThreat.position.y }
           : { x: creature.position.x, y: creature.originZone === Config.ZONE.LIGHT ? 80 : 700 };
-        creature.decisionLockMs = 800; // lock flee commitment for 800ms
+        creature.decisionLockMs = 1600; // calm commitment to retreat
         if (creature.isSleeping) creature.wake();
         break;
 
@@ -250,19 +250,19 @@ export class DecisionSystem {
         creature.decisionTarget = senses.nectarTarget
           ? { x: senses.nectarTarget.x, y: senses.nectarTarget.y }
           : creature.favoriteCoord;
-        creature.decisionLockMs = 600;
+        creature.decisionLockMs = 1800; // committed forage drift
         if (creature.isSleeping) creature.wake();
         break;
 
       case 'court':
         creature.decisionTarget = senses.closestOpposite;
-        creature.decisionLockMs = 900;
+        creature.decisionLockMs = 2000; // harmonious approach
         if (creature.isSleeping) creature.wake();
         break;
 
       case 'play':
         creature.decisionTarget = senses.closestDisturbance;
-        creature.decisionLockMs = 500;
+        creature.decisionLockMs = 1400; // gentle playfulness
         if (creature.isSleeping) creature.wake();
         break;
 
@@ -283,7 +283,7 @@ export class DecisionSystem {
   _recordConsciousEvent(creature, senses, now) {
     const key = `${creature.id}:${creature.decision}`;
     const lastTime = this._diaryCooldowns.get(key) || 0;
-    if (now - lastTime < 18_000) return; // limit diary entries per individual decision
+    if (now - lastTime < 40_000) return; // serene diary pacing (40s cooldown per conscious act)
     this._diaryCooldowns.set(key, now);
 
     const name = creature.name;
