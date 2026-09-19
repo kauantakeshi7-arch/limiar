@@ -64,6 +64,15 @@ export class World {
     /** Active celestial nectar droplet { x, y, radius, life, charges }. */
     this.activeNectar  = null;
 
+    /** Living glowing flora spores floating in ether { x, y, vx, vy, life, maxLife, radius, color, nutrition }. */
+    this.activeSpores  = [];
+
+    /** Cosmic player call ripple waves { x, y, radius, maxRadius, life, decay, createdAt }. */
+    this.playerCalls   = [];
+
+    /** Currently selected creature for inspection / empathy. @type {Creature|null} */
+    this.inspectedCreature = null;
+
     this._subscribeToEvents();
   }
 
@@ -128,9 +137,11 @@ export class World {
     this.particles.update(dt);
     this.particles.emitThresholdAmbient(this.threshold.y, this._width);
     this._emitFloraSporeChance();
+    this._updateSpores(now, dt);
+    this._updatePlayerCalls(now, dt);
 
-    // 8. Sync audio to creature positions & breathing/diurnal filter
-    this.audio.update(now, this.diurnalFactor);
+    // 8. Sync audio to creature positions & adaptive atmosphere
+    this.audio.update(now, this.diurnalFactor, this.creatures);
     for (const c of this.creatures) {
       if (c.isAlive) this.audio.updateCreaturePosition(c, this._width);
     }
@@ -205,6 +216,91 @@ export class World {
     this.audio.pluckHarp(xRatio);
   }
 
+  /**
+   * Brush the membrane flora with touch/mouse, causing deflection and releasing spores.
+   * @param {number} px
+   * @param {number} py
+   */
+  brushFlora(px, py) {
+    const released = this.threshold.brushFlora(px, py, this._width);
+    if (released && released.length > 0) {
+      for (const r of released) {
+        this.activeSpores.push({
+          x: r.x,
+          y: r.y,
+          vx: (Math.random() - 0.5) * 0.5,
+          vy: r.side * (0.35 + Math.random() * 0.4),
+          life: 1.0,
+          maxLife: 10_000 + Math.random() * 5_000,
+          radius: 3.5 + Math.random() * 2,
+          color: r.side < 0 ? new Color(55, 90, 85) : new Color(265, 80, 80),
+          nutrition: Config.INTERACTION_EXPANDED?.SPORE_NUTRITION || 0.22,
+        });
+        this.particles.emitFloraSpore(r.x, r.y, r.side);
+      }
+      this.audio.playFloraRustle?.(px / this._width);
+      globalBus.emit(Events.FLORA_SPORES, { count: released.length, x: px, y: py });
+    }
+  }
+
+  /**
+   * Cosmic Player Call — Emit an acoustic ripple that creatures perceive and answer.
+   * @param {number} px
+   * @param {number} py
+   */
+  emitPlayerCall(px, py) {
+    const call = {
+      x: px,
+      y: py,
+      radius: 6,
+      maxRadius: Config.INTERACTION_EXPANDED?.CALL_RADIUS || 280,
+      life: 1.0,
+      decay: 0.0008,
+      createdAt: performance.now(),
+    };
+    this.playerCalls.push(call);
+    this.audio.playPlayerCall(px / this._width);
+    globalBus.emit(Events.PLAYER_CALL, { x: px, y: py });
+
+    // Nearby conscious creatures notice and answer back in song
+    let responderCount = 0;
+    for (const c of this.creatures) {
+      if (!c.isAlive) continue;
+      const d = Math.hypot(c.position.x - px, c.position.y - py);
+      if (d < call.maxRadius) {
+        if (c.isSleeping) c.wake();
+        c.curiosity = Math.min(1.0, c.curiosity + 0.35);
+        c.expressThought(`${c.name} ouviu seu chamado cósmico`);
+
+        const angle = Math.atan2(py - c.position.y, px - c.position.x);
+        c.velocity = c.velocity.add(new Vector2(Math.cos(angle) * 0.35, Math.sin(angle) * 0.35));
+
+        if (responderCount < 3 && Math.random() < 0.7) {
+          const delay = 320 + responderCount * 280;
+          responderCount++;
+          setTimeout(() => {
+            if (c.isAlive) {
+              this.audio.playCreatureChirp(c);
+              this.particles.emitDreamMote(c.position.x, c.position.y, c.color);
+            }
+          }, delay);
+        }
+      }
+    }
+  }
+
+  /**
+   * Find creature at pointer location and toggle/set inspection.
+   * @param {number} px
+   * @param {number} py
+   * @returns {Creature|null}
+   */
+  inspectAt(px, py) {
+    const target = this._closestCreatureTo(px, py, 48);
+    this.inspectedCreature = target;
+    return target;
+  }
+
   // ── Private helpers ───────────────────────────────────────────────────────
 
   // ── Wind simulation ───────────────────────────────────────────────────────
@@ -262,6 +358,10 @@ export class World {
   }
 
   _removeDeadCreatures() {
+    if (this.inspectedCreature && !this.inspectedCreature.isAlive) {
+      this.inspectedCreature = null;
+    }
+
     let hasDead = false;
     for (let i = 0; i < this.creatures.length; i++) {
       if (!this.creatures[i].isAlive) {
@@ -372,6 +472,51 @@ export class World {
     }
   }
 
+  _updateSpores(now, dt) {
+    if (this.activeSpores.length === 0) return;
+    for (let i = this.activeSpores.length - 1; i >= 0; i--) {
+      const spore = this.activeSpores[i];
+      spore.life -= dt / spore.maxLife;
+      if (spore.life <= 0) {
+        this.activeSpores.splice(i, 1);
+        continue;
+      }
+      spore.x += (spore.vx + this.wind.x * 0.5) * (dt / 16.67);
+      spore.y += (spore.vy + this.wind.y * 0.2) * (dt / 16.67);
+
+      // Boundaries clamp
+      if (spore.x < 0 || spore.x > this._width || spore.y < 0 || spore.y > this._height) {
+        this.activeSpores.splice(i, 1);
+        continue;
+      }
+
+      // Creatures can consume spores
+      for (const c of this.creatures) {
+        if (!c.isAlive) continue;
+        const d = Math.hypot(c.position.x - spore.x, c.position.y - spore.y);
+        if (d < c.radius + spore.radius + 6) {
+          c.energy = Math.min(1.0, c.energy + spore.nutrition);
+          c.experiencePeace(0.12);
+          this.particles.emitDreamMote(spore.x, spore.y, spore.color);
+          this.activeSpores.splice(i, 1);
+          break;
+        }
+      }
+    }
+  }
+
+  _updatePlayerCalls(now, dt) {
+    if (this.playerCalls.length === 0) return;
+    for (let i = this.playerCalls.length - 1; i >= 0; i--) {
+      const call = this.playerCalls[i];
+      call.life -= call.decay * dt;
+      call.radius += ((call.maxRadius - call.radius) * 0.045) * (dt / 16.67);
+      if (call.life <= 0) {
+        this.playerCalls.splice(i, 1);
+      }
+    }
+  }
+
   // ── Event subscriptions ───────────────────────────────────────────────────
 
   _subscribeToEvents() {
@@ -396,6 +541,12 @@ export class World {
     globalBus.on(Events.CREATURE_FORAGING,     e       => this.diary.add(e.text));
     globalBus.on(Events.CREATURE_YEARNING,     e       => this.diary.add(e.text));
 
+    // Legendary Mythic Awakening
+    globalBus.on(Events.CREATURE_LEGENDARY, ({ creature, traitName }) => {
+      this.diary.add(`🌟 DESPERTAR MÍTICO: ${creature.name} manifestou a mutação lendária «${traitName}»!`);
+      this.bestiary.unlock('transcendent', creature);
+    });
+
     // Birth of new generation offspring from the sacred dance
     globalBus.on(Events.CREATURE_BORN, ({ parentA, parentB, position }) => {
       const childDna = DNA.crossover(parentA.dna, parentB.dna, 0.14, 0.22);
@@ -417,6 +568,14 @@ export class World {
       const genRomans = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
       const roman = genRomans[Math.min(9, child.generation - 1)] || child.generation;
       this.diary.add(`🌱 Da dança sagrada de ${parentA.name} e ${parentB.name}, nasceu ${child.name} (Geração ${roman}).`);
+
+      if (child.legendaryTrait) {
+        globalBus.emit(Events.CREATURE_LEGENDARY, {
+          creature: child,
+          trait: child.legendaryTrait,
+          traitName: child.legendaryName,
+        });
+      }
     });
 
     // Bestiary unlocks

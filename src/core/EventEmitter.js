@@ -112,4 +112,9 @@ export const Events = Object.freeze({
   CREATURE_FORAGING:       'creature:foraging',
   CREATURE_YEARNING:       'creature:yearning',
   CREATURE_BORN:           'creature:born',
+  CREATURE_LEGENDARY:      'creature:legendary',
+
+  // Expanded Interactivity
+  FLORA_SPORES:            'flora:spores',
+  PLAYER_CALL:             'player:call',
 });

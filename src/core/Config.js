@@ -168,4 +168,48 @@ export const Config = Object.freeze({
     MEMORY_RETENTION: 0.9992,   // Long-lasting emotional memory
   }),
 
+  // ── Legendary Phenotypes & Mythical Mutations ─────────────────────────────
+  LEGENDARY: Object.freeze({
+    MUTATION_CHANCE_BASE: 0.035, // 3.5% base chance on offspring crossover
+    TRAITS: Object.freeze({
+      TWIN_WINGS:     'twin_wings',     // Manta with secondary etheric wings
+      STELLAR_HALO:   'stellar_halo',   // Orbiting celestial halo particles
+      ABYSSAL_VEINS:  'abyssal_veins',  // Night-glowing fluorescent vascular veins
+      PRISM_TAIL:     'prism_tail',     // Rainbow spectral chromatic refraction
+    }),
+  }),
+
+  // ── Player Interaction & Call & Response ──────────────────────────────────
+  INTERACTION_EXPANDED: Object.freeze({
+    CALL_HOLD_MS: 380,          // Hold duration in empty space to emit melodic call
+    CALL_RADIUS: 260,           // Soundwave propagation radius
+    FLORA_BRUSH_RADIUS: 42,     // Distance to brush and deflect flora reeds
+    SPORE_NUTRITION: 0.28,      // Energy given by eating a living spore
+    SPORE_LIFESPAN_MS: 12000,   // How long released spores drift before fading
+  }),
+
+  // ── Persistence ───────────────────────────────────────────────────────────
+  STORAGE: Object.freeze({
+    KEY_BESTIARY: 'limiar_bestiary_v1',
+    BESTIARY_KEY: 'limiar_bestiary_v1',
+    KEY_DIARY:    'limiar_diary_v1',
+    DIARY_KEY:    'limiar_diary_v1',
+    KEY_STATS:    'limiar_stats_v1',
+    KEY_SETTINGS: 'limiar_settings_v1',
+  }),
+
+  // ── Mobile Haptics ────────────────────────────────────────────────────────
+  HAPTICS: Object.freeze({
+    PLUCK: 12,              // ms light tap when string plucks
+    BRUSH: 8,               // ms tick when flora brushes
+    CALL: 22,               // ms gentle buzz when singing call
+    BIRTH: 35,              // ms triumphant pulse on creature birth
+    SNAP: 18,               // ms click on photo snapshot
+    INSPECT_POP_MS: 22,
+    TAP_LIGHT_MS: 8,
+    CALL_HARMONY_MS: 28,
+    NECTAR_CONDENSE_MS: 40,
+    SNAP_CAPTURE_MS: 35,
+  }),
+
 });

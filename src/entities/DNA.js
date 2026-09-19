@@ -39,6 +39,7 @@ export class DNA {
     flutter     = 0.5,
     curiosity   = 0.5,
     caution     = 0.5,
+    legendaryTrait = null,
   } = {}) {
     this.resistance  = Math.max(0, Math.min(1, resistance));
     this.memory      = Math.max(0, Math.min(1, memory));
@@ -53,6 +54,7 @@ export class DNA {
     this.flutter     = Math.max(0, Math.min(1, flutter));
     this.curiosity   = Math.max(0, Math.min(1, curiosity));
     this.caution     = Math.max(0, Math.min(1, caution));
+    this.legendaryTrait = legendaryTrait;
   }
 
   // ── Derived stats ─────────────────────────────────────────────────────────
@@ -120,6 +122,21 @@ export class DNA {
         genes[key] += Random.float(-mutationStrength, mutationStrength);
       }
     }
+
+    // Legendary Trait inheritance or spontaneous mythical awakening
+    let trait = null;
+    if (parentA.legendaryTrait && Random.chance(0.48)) {
+      trait = parentA.legendaryTrait;
+    } else if (parentB.legendaryTrait && Random.chance(0.48)) {
+      trait = parentB.legendaryTrait;
+    } else if (Random.chance(Config.LEGENDARY?.MUTATION_CHANCE_BASE || 0.035)) {
+      const allTraits = Object.values(Config.LEGENDARY?.TRAITS || {});
+      if (allTraits.length > 0) {
+        trait = allTraits[Math.floor(Math.random() * allTraits.length)];
+      }
+    }
+    genes.legendaryTrait = trait;
+
     return new DNA(genes);
   }
 

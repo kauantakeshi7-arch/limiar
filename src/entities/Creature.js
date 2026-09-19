@@ -154,6 +154,14 @@ export class Creature {
       }))
     );
 
+    // ── Legendary Mutation & Traits ─────────────────────────────────────────
+    this.legendaryTrait = this.dna.legendaryTrait;
+    this.isChimera      = false;
+
+    // ── Live Expressive Thoughts ────────────────────────────────────────────
+    this.customThought = null;
+    this.customThoughtExpiry = 0;
+
     // ── Discovery ──────────────────────────────────────────────────────────
     this.discovered = false;
   }
@@ -162,6 +170,73 @@ export class Creature {
 
   get bodyPlan() {
     return this.dna.bodyPlanType;
+  }
+
+  get legendaryName() {
+    switch (this.legendaryTrait) {
+      case 'twin_wings':    return 'Asas de Seda Dupla';
+      case 'stellar_halo':  return 'Auréola Estelar';
+      case 'abyssal_veins': return 'Veias Abissais Noturnas';
+      case 'prism_tail':    return 'Cauda Prisma de Cristal';
+      default:              return null;
+    }
+  }
+
+  get bodyPlanLabel() {
+    switch (this.bodyPlan) {
+      case Config.BODY_PLAN.MANTA:      return 'Pipa Cósmica';
+      case Config.BODY_PLAN.JELLYFISH:  return 'Medusa Abissal';
+      case Config.BODY_PLAN.SERPENTINE: return 'Serpente do Limiar';
+      case Config.BODY_PLAN.CRYSTAL:    return 'Radiolário Sagrado';
+      default:                          return 'Ameba Ancestral';
+    }
+  }
+
+  /** Temporarily express a conscious thought in the empathy card. */
+  expressThought(text, duration = 3500) {
+    this.customThought = text;
+    this.customThoughtExpiry = performance.now() + duration;
+  }
+
+  /** Return poetic, real-time thoughts of the conscious creature. */
+  getStatusText() {
+    if (this.customThought && performance.now() < this.customThoughtExpiry) {
+      return this.customThought;
+    }
+    if (this.isSleeping) {
+      return this.originZone === 'light'
+        ? 'Dormindo serenamente, sonhando com o zênite solar...'
+        : 'Adormecida no abismo, sonhando com as profundezas estelares...';
+    }
+    if (this.isDancing) {
+      return `Em ressonância harmônica na Dança dos Opostos com ${this.dancePartner?.name || 'um parceiro'}!`;
+    }
+    if (this.state === CreatureState.SYMBIOTIC) {
+      return `Em comunhão de simbiose cósmica com ${this.bondedWith?.name || 'seu par'}.`;
+    }
+    if (this.state === CreatureState.TRANSCENDENT) {
+      return 'Transcendeu a divisão dos mundos e brilha em harmonia absoluta.';
+    }
+
+    switch (this.decision) {
+      case 'flee':
+        return this.membraneCaution > 0.3
+          ? 'Recuando cautelosamente do limiar para proteger sua essência.'
+          : 'Esquivando-se com agilidade de uma presença imponente.';
+      case 'forage':
+        return this.energy < 0.35
+          ? 'Faminta, farejando o éter em busca de néctar celeste.'
+          : 'Navegando graciosamente em direção a nutrientes na água.';
+      case 'court':
+        return 'Encantada pela presença do mundo oposto, buscando aproximar-se.';
+      case 'play':
+        return 'Fascinada com sua presença, brincando ao redor do seu toque.';
+      case 'rest':
+        return 'Fatigada, flutuando calma para recuperar o alento vital.';
+      case 'cruise':
+      default:
+        return 'Planando em paz pelas correntes térmicas do seu reino.';
+    }
   }
 
   // ── Sleep & Dance Methods ──────────────────────────────────────────────────
@@ -283,6 +358,14 @@ export class Creature {
   experienceTrauma(amount = 0.35) {
     this.membraneCaution = Math.min(1.0, this.membraneCaution + amount * (0.5 + this.dna.caution * 0.5));
     this.fear = Math.min(1.0, this.fear + 0.65);
+  }
+
+  /**
+   * Experience soothing harmony, calming fears and easing membrane caution.
+   */
+  experiencePeace(amount = 0.12) {
+    this.fear = Math.max(0.0, this.fear - amount);
+    this.membraneCaution = Math.max(0.0, this.membraneCaution - amount * 0.4);
   }
 
   /**

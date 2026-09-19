@@ -9,6 +9,7 @@ export class Diary {
     /** @type {{ timestamp: Date, text: string }[]} */
     this._entries = [];
     this._element = document.getElementById('diary-entries');
+    this._loadFromStorage();
   }
 
   /**
@@ -24,7 +25,8 @@ export class Diary {
     if (this._entries.length > Config.DIARY.MAX_ENTRIES) {
       this._entries.pop();
     }
-    this._renderLatest(entry);
+    this._renderLatest(entry, true);
+    this._saveToStorage();
   }
 
   /** All diary entries (newest first). */
@@ -32,20 +34,49 @@ export class Diary {
 
   // ── Private ───────────────────────────────────────────────────────────────
 
-  _renderLatest(entry) {
+  _loadFromStorage() {
+    try {
+      const saved = localStorage.getItem(Config.STORAGE?.DIARY_KEY || 'limiar_diary_v1');
+      if (saved) {
+        const raw = JSON.parse(saved);
+        if (Array.isArray(raw)) {
+          for (let i = raw.length - 1; i >= 0; i--) {
+            const r = raw[i];
+            const entry = { timestamp: new Date(r.timestamp), text: r.text };
+            this._entries.unshift(entry);
+            this._renderLatest(entry, false);
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  _saveToStorage() {
+    try {
+      const toSave = this._entries.slice(0, 20).map(e => ({
+        timestamp: e.timestamp.toISOString(),
+        text: e.text,
+      }));
+      localStorage.setItem(Config.STORAGE?.DIARY_KEY || 'limiar_diary_v1', JSON.stringify(toSave));
+    } catch (_) {}
+  }
+
+  _renderLatest(entry, isNew = true) {
     if (!this._element) return;
     const el = document.createElement('div');
-    el.className = 'diary-entry new';
+    el.className = `diary-entry ${isNew ? 'new' : ''}`;
     el.innerHTML = `
       <span class="diary-time">${this._formatTime(entry.timestamp)}</span>
       <span class="diary-text">${entry.text}</span>
     `;
     this._element.insertBefore(el, this._element.firstChild);
 
-    // Remove "new" animation class after it plays
-    requestAnimationFrame(() => {
-      setTimeout(() => el.classList.remove('new'), 600);
-    });
+    if (isNew) {
+      const schedule = typeof requestAnimationFrame !== 'undefined' ? requestAnimationFrame : (cb) => setTimeout(cb, 16);
+      schedule(() => {
+        setTimeout(() => el?.classList?.remove?.('new'), 600);
+      });
+    }
 
     // Trim to max in DOM as well
     while (this._element.children.length > Config.DIARY.MAX_ENTRIES) {

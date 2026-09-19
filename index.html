@@ -41,11 +41,58 @@
     </div>
   </div>
 
+  <!-- ── Inspect Card overlay ───────────────────────────────────── -->
+  <div id="inspect-card" class="inspect-container" role="dialog" aria-label="Inspeção de Criatura">
+    <div class="inspect-inner">
+      <button class="inspect-close" aria-label="Fechar Inspeção">×</button>
+      <div class="inspect-header">
+        <h3 class="inspect-name">Criatura</h3>
+        <span class="inspect-badge">Pipa Cósmica • Geração I</span>
+      </div>
+      <div class="inspect-legendary" style="display:none;"></div>
+      <p class="inspect-thought">« Flutuando em harmonia... »</p>
+      
+      <div class="inspect-meters">
+        <div class="meter-row meter-vitality">
+          <span class="meter-label">Vitalidade</span>
+          <div class="meter-track"><div class="meter-fill"></div></div>
+          <span class="meter-val">80%</span>
+        </div>
+        <div class="meter-row meter-calm">
+          <span class="meter-label">Serenidade</span>
+          <div class="meter-track"><div class="meter-fill"></div></div>
+          <span class="meter-val">95%</span>
+        </div>
+        <div class="meter-row meter-social">
+          <span class="meter-label">Comunhão</span>
+          <div class="meter-track"><div class="meter-fill"></div></div>
+          <span class="meter-val">60%</span>
+        </div>
+        <div class="meter-row meter-curiosity">
+          <span class="meter-label">Curiosidade</span>
+          <div class="meter-track"><div class="meter-fill"></div></div>
+          <span class="meter-val">75%</span>
+        </div>
+        <div class="meter-row meter-vigor">
+          <span class="meter-label">Vigor</span>
+          <div class="meter-track"><div class="meter-fill"></div></div>
+          <span class="meter-val">88%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ── HUD buttons ────────────────────────────────────────────── -->
   <div id="hud" aria-label="Controles">
+    <button id="btn-sound"    class="hud-btn" title="Alternar Som" aria-label="Alternar Som">🔊</button>
+    <button id="btn-zen"      class="hud-btn" title="Modo Zen (0.5x)" aria-label="Modo Zen">⏳</button>
+    <button id="btn-photo"    class="hud-btn" title="Capturar Wallpaper" aria-label="Capturar Foto">📷</button>
     <button id="btn-diary"    class="hud-btn" title="Diário"    aria-label="Abrir Diário">📖</button>
     <button id="btn-bestiary" class="hud-btn" title="Bestiário" aria-label="Abrir Bestiário">🦋</button>
   </div>
+
+  <!-- ── Photo Flash Effect ─────────────────────────────────────── -->
+  <div id="photo-flash" class="photo-flash"></div>
 
   <!-- ── Title splash (fades out after load) ────────────────────── -->
   <div id="splash">

@@ -16,6 +16,9 @@ export class AudioEngine {
     /** Map<creatureId, { osc, gain }> */
     this._creatureNodes = new Map();
 
+    this.isMuted      = false;
+    this._targetVolume = 0.55;
+
     // Pentatonic scale frequencies (Hz) in two octaves
     this._lightNotes  = [261.6, 293.7, 329.6, 392.0, 440.0, 523.3, 587.3]; // C major pent
     this._shadowNotes = [138.6, 155.6, 185.0, 207.7, 233.1, 277.2, 311.1]; // C minor pent (lower)
@@ -50,23 +53,69 @@ export class AudioEngine {
 
       this._initialized = true;
 
-      // Fade in gently
-      this._masterGain.gain.linearRampToValueAtTime(0.55, this._ctx.currentTime + 3);
+      // Fade in gently if unmuted
+      if (!this.isMuted) {
+        this._masterGain.gain.linearRampToValueAtTime(this._targetVolume, this._ctx.currentTime + 3);
+      }
     } catch (e) {
       console.warn('[AudioEngine] Web Audio not available:', e);
     }
   }
 
   /**
-   * Per-frame audio update — modulates filter with world breath and diurnal tide.
+   * Toggle audio mute state with smooth exponential ramp.
+   * @returns {boolean} New mute state.
+   */
+  toggleMute() {
+    this.isMuted = !this.isMuted;
+    if (this._initialized && this._masterGain) {
+      const now = this._ctx.currentTime;
+      const target = this.isMuted ? 0.0001 : this._targetVolume;
+      this._masterGain.gain.cancelScheduledValues(now);
+      this._masterGain.gain.linearRampToValueAtTime(target, now + 0.3);
+    }
+    return this.isMuted;
+  }
+
+  /**
+   * Per-frame audio update — modulates filter with world breath, diurnal tide, and ecology.
    * @param {number} now
    * @param {number} [diurnalFactor=0.5] - 1 = zenith, 0 = nadir
+   * @param {Array<import('../entities/Creature.js').Creature>} [creatures=[]]
    */
-  update(now, diurnalFactor = 0.5) {
+  update(now, diurnalFactor = 0.5, creatures = []) {
     if (!this._initialized || !this._breathFilter) return;
     const breath = 0.5 + 0.5 * Math.sin(now * 0.00074);
-    const cutoff = 400 + breath * 350 + diurnalFactor * 350;
-    this._breathFilter.frequency.setTargetAtTime(cutoff, this._ctx.currentTime, 0.08);
+    let cutoff = 400 + breath * 350 + diurnalFactor * 350;
+
+    // Adaptive ambient modulation based on ecology:
+    if (creatures && creatures.length > 0) {
+      let sleepingCount = 0;
+      let dancingCount = 0;
+      let aliveCount = 0;
+
+      for (let i = 0; i < creatures.length; i++) {
+        const c = creatures[i];
+        if (c.isAlive) {
+          aliveCount++;
+          if (c.isSleeping) sleepingCount++;
+          if (c.isDancing) dancingCount++;
+        }
+      }
+
+      if (aliveCount > 0) {
+        const sleepRatio = sleepingCount / aliveCount;
+        // Soften and warm filter when world is asleep (lullaby effect)
+        cutoff = cutoff * (1.0 - sleepRatio * 0.32);
+
+        // Warm drone swell if sacred dance is occurring
+        if (dancingCount > 0) {
+          cutoff += 180;
+        }
+      }
+    }
+
+    this._breathFilter.frequency.setTargetAtTime(Math.max(220, cutoff), this._ctx.currentTime, 0.1);
   }
 
   /**
@@ -280,6 +329,101 @@ export class AudioEngine {
   playTransformation() { this._playTone(440, 'triangle', 0.08, 0.8); }
   playDissolution()  { this._playTone(110, 'sawtooth', 0.06, 1.2); }
   playSymbiosis()    { this._playTone(660, 'sine', 0.1, 1.0); }
+
+  /**
+   * Organic reed rustle when brushing flora.
+   * @param {number} [xRatio=0.5]
+   */
+  playFloraRustle(xRatio = 0.5) {
+    if (!this._initialized || this.isMuted) return;
+    const now = this._ctx.currentTime;
+    if (this._lastRustle && now - this._lastRustle < 0.12) return;
+    this._lastRustle = now;
+
+    const osc = this._ctx.createOscillator();
+    const gain = this._makeGain(0.012);
+    const panner = this._ctx.createStereoPanner();
+    panner.pan.value = Math.max(-0.9, Math.min(0.9, (xRatio - 0.5) * 1.8));
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(620 + Math.random() * 240, now);
+    osc.frequency.exponentialRampToValueAtTime(340, now + 0.25);
+
+    osc.connect(gain);
+    gain.connect(panner);
+    panner.connect(this._reverb);
+
+    osc.start(now);
+    gain.gain.setValueAtTime(0.012, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+    setTimeout(() => { try { osc.stop(); } catch (_) {} }, 300);
+  }
+
+  /**
+   * Cosmic Player Call — Deep crystal bowl singing bell.
+   * @param {number} [xRatio=0.5]
+   */
+  playPlayerCall(xRatio = 0.5) {
+    if (!this._initialized || this.isMuted) return;
+    const now = this._ctx.currentTime;
+    const freqs = [293.66, 440.0, 587.33]; // D4, A4, D5 celestial triad
+    const panner = this._ctx.createStereoPanner();
+    panner.pan.value = Math.max(-0.9, Math.min(0.9, (xRatio - 0.5) * 1.8));
+
+    freqs.forEach((freq, idx) => {
+      const osc = this._ctx.createOscillator();
+      const gain = this._makeGain(0.0001);
+
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+
+      osc.connect(gain);
+      gain.connect(panner);
+      panner.connect(this._reverb);
+
+      const delay = idx * 0.08;
+      const startT = now + delay;
+      osc.start(startT);
+
+      gain.gain.setValueAtTime(0.0001, startT);
+      gain.gain.linearRampToValueAtTime(0.024 / (idx + 1), startT + 0.4);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startT + 2.8);
+
+      setTimeout(() => { try { osc.stop(); } catch (_) {} }, (delay + 3.0) * 1000);
+    });
+  }
+
+  /**
+   * Creature sings back to the player in harmonic resonance.
+   * @param {import('../entities/Creature.js').Creature} creature
+   */
+  playCreatureChirp(creature) {
+    if (!this._initialized || this.isMuted) return;
+    const now = this._ctx.currentTime;
+    const notes = creature.originZone === 'light' ? this._lightNotes : this._shadowNotes;
+    const baseFreq = notes[Math.floor(creature.dna.luminosity * (notes.length - 1))];
+
+    const osc = this._ctx.createOscillator();
+    const gain = this._makeGain(0.0001);
+    const panner = this._ctx.createStereoPanner();
+    panner.pan.value = Math.max(-0.9, Math.min(0.9, (creature.position.x / 1200) * 2 - 1));
+
+    osc.type = creature.legendaryTrait ? 'sine' : (creature.originZone === 'light' ? 'triangle' : 'sine');
+    osc.frequency.setValueAtTime(baseFreq * 1.5, now);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 2.0, now + 0.16);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, now + 0.35);
+
+    osc.connect(gain);
+    gain.connect(panner);
+    panner.connect(this._reverb);
+
+    osc.start(now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(0.022, now + 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.7);
+
+    setTimeout(() => { try { osc.stop(); } catch (_) {} }, 750);
+  }
 
   // ── Private helpers ───────────────────────────────────────────────────────
 

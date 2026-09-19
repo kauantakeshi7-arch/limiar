@@ -95,6 +95,10 @@ export class InteractionSystem {
       b.bondedWith = a;
       a.transitionTo(CreatureState.SYMBIOTIC);
       b.transitionTo(CreatureState.SYMBIOTIC);
+      if (a.bodyPlan !== b.bodyPlan) {
+        a.isChimera = true;
+        b.isChimera = true;
+      }
       particles.emitTransformBurst(
         (a.position.x + b.position.x) / 2,
         (a.position.y + b.position.y) / 2,

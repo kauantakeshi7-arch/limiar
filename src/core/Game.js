@@ -1,5 +1,7 @@
 import { World } from '../world/World.js';
 import { Renderer } from '../rendering/Renderer.js';
+import { InspectCard } from '../ui/InspectCard.js';
+import { Config } from './Config.js';
 
 /**
  * Game — The main application controller.
@@ -31,6 +33,8 @@ export class Game {
 
     this._diaryOpen    = false;
     this._bestiaryOpen = false;
+    this._inspectCard  = new InspectCard();
+    this._timeScale    = 1.0;
 
     /** @type {Array<{x:number, y:number, startTime:number}>} */
     this._ripples = [];
@@ -38,10 +42,11 @@ export class Game {
     /** @type {Map<number, {x:number, y:number}>} */
     this._activePointers = new Map();
 
-    // Nectar hold & Harp glide tracking
+    // Nectar hold & Player Call & Harp glide tracking
     this._holdStartPos   = null;
-    this._holdStartTime = 0;
+    this._holdStartTime  = 0;
     this._nectarSpawned  = false;
+    this._callEmitted    = false;
     this._lastPointerY   = null;
 
     this._bindInput();
@@ -77,8 +82,9 @@ export class Game {
       const rawDt = timestamp - this._lastTime;
       this._lastTime = timestamp;
 
-      // Zen Anti-Spike: cap dt at 33.3ms (never allow lag spikes to slingshot creatures)
-      const dt = Math.max(1, Math.min(rawDt, 33.3));
+      // Zen Anti-Spike: cap dt at 33.3ms & apply smooth timeScale (0.5x in Zen Mode)
+      const baseDt = Math.max(1, Math.min(rawDt, 33.3));
+      const dt = baseDt * this._timeScale;
 
       // Collect active touches + unique ripples without stacking forces
       const activeTouches = Array.from(this._activePointers.values());
@@ -95,30 +101,50 @@ export class Game {
 
       this._world.update(timestamp, dt, touchDisturbances);
 
-      // Check hold-to-condense celestial nectar
-      if (this._holdStartPos && !this._nectarSpawned) {
+      // Check hold gestures (Celestial Nectar on threshold, Player Call away from threshold)
+      if (this._holdStartPos) {
         const holdElapsed = timestamp - this._holdStartTime;
-        if (holdElapsed > 180 && holdElapsed < 600) {
-          this._world.particles.emitNectarSwirl(this._holdStartPos.x, this._holdStartPos.y);
-        } else if (holdElapsed >= 600) {
-          this._world.spawnNectar(this._holdStartPos.x, this._holdStartPos.y);
-          this._nectarSpawned = true;
+        const nearThreshold = Math.abs(this._holdStartPos.y - this._world.threshold.y) < 36;
+
+        if (nearThreshold && !this._nectarSpawned) {
+          if (holdElapsed > 180 && holdElapsed < 600) {
+            this._world.particles.emitNectarSwirl(this._holdStartPos.x, this._holdStartPos.y);
+          } else if (holdElapsed >= 600) {
+            this._world.spawnNectar(this._holdStartPos.x, this._holdStartPos.y);
+            this._nectarSpawned = true;
+            this._vibrate(Config.HAPTICS?.NECTAR_CONDENSE_MS || 40);
+          }
+        } else if (!nearThreshold && !this._callEmitted) {
+          const callReq = Config.INTERACTION_EXPANDED?.CALL_HOLD_MS || 380;
+          if (holdElapsed > 160 && holdElapsed < callReq) {
+            this._world.particles.emitNectarSwirl(this._holdStartPos.x, this._holdStartPos.y);
+          } else if (holdElapsed >= callReq) {
+            this._world.emitPlayerCall(this._holdStartPos.x, this._holdStartPos.y);
+            this._callEmitted = true;
+            this._vibrate(Config.HAPTICS?.CALL_HARMONY_MS || 28);
+          }
         }
       }
+
+      // Update active inspect card telemetry
+      this._inspectCard.update();
 
       // Prune expired ripples (duration: 1800ms)
       this._ripples = this._ripples.filter(r => timestamp - r.startTime < 1800);
 
       this._renderer.render({
-        creatures:     this._world.creatures,
-        threshold:     this._world.threshold,
-        particles:     this._world.particles,
-        ripples:       this._ripples,
-        wind:          this._world.wind,
-        activeNectar:  this._world.activeNectar,
-        diurnalFactor: this._world.diurnalFactor,
-        diurnalCycle:  this._world.diurnalCycle,
-        now:           timestamp,
+        creatures:         this._world.creatures,
+        threshold:         this._world.threshold,
+        particles:         this._world.particles,
+        ripples:           this._ripples,
+        wind:              this._world.wind,
+        activeNectar:      this._world.activeNectar,
+        activeSpores:      this._world.activeSpores,
+        playerCalls:       this._world.playerCalls,
+        inspectedCreature: this._world.inspectedCreature,
+        diurnalFactor:     this._world.diurnalFactor,
+        diurnalCycle:      this._world.diurnalCycle,
+        now:               timestamp,
         dt,
       });
     } catch (err) {
@@ -186,11 +212,14 @@ export class Game {
     const { x, y } = this._canvasPos(event);
     this._activePointers.set(event.pointerId, { x, y });
 
-    // Start hold tracking for celestial nectar
+    // Start hold tracking for celestial nectar or cosmic player call
     if (event.isPrimary) {
+      this._pointerDownPos = { x, y };
+      this._pointerDownTime = performance.now();
       this._holdStartPos   = { x, y };
-      this._holdStartTime = performance.now();
+      this._holdStartTime  = performance.now();
       this._nectarSpawned  = false;
+      this._callEmitted    = false;
       this._lastPointerY   = y;
       this._ripples.push({ x, y, startTime: performance.now() });
     }
@@ -221,6 +250,11 @@ export class Game {
       }
     }
 
+    // Interactive membrane flora brushing
+    if (Math.abs(pos.y - this._world.threshold.y) < 52) {
+      this._world.brushFlora(pos.x, pos.y);
+    }
+
     // Liquid harp: glide across or along threshold
     const ty = this._world.threshold.y;
     if (this._lastPointerY !== null && !this._world.threshold.isDragging) {
@@ -245,9 +279,34 @@ export class Game {
 
     if (!event.isPrimary) return;
     const { x, y } = this._canvasPos(event);
+    const elapsed = performance.now() - (this._pointerDownTime || 0);
+    const dist = this._pointerDownPos ? Math.hypot(x - this._pointerDownPos.x, y - this._pointerDownPos.y) : 999;
+
     this._holdStartPos = null;
     this._lastPointerY = null;
+    this._pointerDownPos = null;
     this._world.threshold.endDrag();
+
+    // If hold-to-call or nectar was triggered, do not whisper/inspect
+    if (this._nectarSpawned || this._callEmitted) {
+      this._nectarSpawned = false;
+      this._callEmitted = false;
+      return;
+    }
+
+    // Empathy tap detection (< 300ms, moved < 16px)
+    if (elapsed < 300 && dist < 16) {
+      const inspected = this._world.inspectAt(x, y);
+      if (inspected) {
+        this._inspectCard.inspect(inspected);
+        this._vibrate(Config.HAPTICS?.INSPECT_POP_MS || 22);
+        return;
+      } else if (this._inspectCard.isOpen) {
+        this._inspectCard.close();
+        this._world.inspectAt(-999, -999);
+      }
+    }
+
     // Tap on or near a creature = whisper
     this._world.whisper(x, y);
   }
@@ -280,6 +339,32 @@ export class Game {
     document.getElementById('diary-close')?.addEventListener('click', () => this._closeOverlay('diary'));
     document.getElementById('bestiary-close')?.addEventListener('click', () => this._closeOverlay('bestiary'));
 
+    // Sound toggle button (Mute / Unmute)
+    const btnSound = document.getElementById('btn-sound');
+    btnSound?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isMuted = this._world.audio.toggleMute();
+      btnSound.textContent = isMuted ? '🔇' : '🔊';
+      btnSound.classList.toggle('active', isMuted);
+      this._vibrate(Config.HAPTICS?.TAP_LIGHT_MS || 8);
+    });
+
+    // Zen slow-motion speed toggle (0.5x / 1.0x)
+    const btnZen = document.getElementById('btn-zen');
+    btnZen?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._timeScale = this._timeScale === 1.0 ? 0.5 : 1.0;
+      btnZen.classList.toggle('active', this._timeScale < 1.0);
+      this._vibrate(Config.HAPTICS?.TAP_LIGHT_MS || 8);
+    });
+
+    // Photo Wallpaper snapshot button
+    const btnPhoto = document.getElementById('btn-photo');
+    btnPhoto?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._triggerWallpaperCapture();
+    });
+
     // Close overlays when tapping the backdrop
     ['diary', 'bestiary'].forEach(id => {
       document.getElementById(id)?.addEventListener('pointerdown', e => {
@@ -306,6 +391,32 @@ export class Game {
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  /** Haptic feedback helper. */
+  _vibrate(ms) {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate(ms);
+      }
+    } catch (_) {}
+  }
+
+  /** Wallpaper 4K snapshot capture with flash effect and hidden UI. */
+  _triggerWallpaperCapture() {
+    document.body.classList.add('wallpaper-mode');
+    const flash = document.getElementById('photo-flash');
+    if (flash) {
+      flash.classList.add('active');
+      setTimeout(() => flash.classList.remove('active'), 90);
+    }
+    this._vibrate(Config.HAPTICS?.SNAP_CAPTURE_MS || 35);
+    requestAnimationFrame(() => {
+      this._renderer.captureSnapshot();
+      setTimeout(() => {
+        document.body.classList.remove('wallpaper-mode');
+      }, 150);
+    });
+  }
 
   /** Convert a PointerEvent to CSS-pixel canvas coordinates. */
   _canvasPos(event) {

@@ -86,6 +86,26 @@ export class Renderer {
     });
   }
 
+  /**
+   * Capture a clean high-resolution snapshot wallpaper of the current world.
+   * @returns {boolean} Success status.
+   */
+  captureSnapshot() {
+    try {
+      const dataUrl = this.canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `limiar-cosmos-${Date.now()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return true;
+    } catch (err) {
+      console.error('[Renderer] Snapshot capture failed:', err);
+      return false;
+    }
+  }
+
   // ── Main render ───────────────────────────────────────────────────────────
 
   /**
@@ -105,6 +125,9 @@ export class Renderer {
     ripples = [],
     wind = { x: 0, y: 0 },
     activeNectar = null,
+    activeSpores = [],
+    playerCalls = [],
+    inspectedCreature = null,
     diurnalFactor = 0.5,
     diurnalCycle = 0,
     now,
@@ -188,11 +211,20 @@ export class Renderer {
       // 11. External particles
       this._drawParticles(ctx, particles);
 
+      // 11.5. Floating flora spores & Player Calls
+      this._drawSpores(ctx, activeSpores, now);
+      this._drawPlayerCalls(ctx, playerCalls, now);
+
       // 12. Celestial nectar droplet
       this._drawNectar(ctx, activeNectar, now);
 
       // 13. Creatures + orbital motes + sleeping auras
       this._drawCreatures(ctx, creatures, now, breath, dt);
+
+      // 13.5. Inspected creature sacred indicator
+      if (inspectedCreature && inspectedCreature.isAlive) {
+        this._drawInspectedIndicator(ctx, inspectedCreature, now);
+      }
 
       // 14. Touch ripples
       this._drawRipples(ctx, ripples, now);
@@ -1149,6 +1181,16 @@ export class Renderer {
         creature.metabolicFlash = Math.max(0, creature.metabolicFlash - dt * 0.0032);
       }
 
+      // Legendary Visual Mutations
+      if (creature.legendaryTrait) {
+        this._drawLegendaryMutation(ctx, creature, now, breath);
+      }
+
+      // Chimera symbiosis dual aura
+      if (creature.isChimera) {
+        this._drawChimeraAura(ctx, creature, now);
+      }
+
       // State overlays
       if (creature.state === CreatureState.WITNESS)      this._drawWitnessEye(ctx, creature, now);
       if (creature.state === CreatureState.TRANSCENDENT) this._drawTranscendentHalo(ctx, creature, now);
@@ -2022,6 +2064,260 @@ export class Renderer {
       nightIntensity,
       tPhase: normalized,
     };
+  }
+
+  // ── 17. Expanded Sensory, Empathy & Mythic Rendering ──────────────────────
+
+  /**
+   * Render glowing celestial reticle around currently inspected creature.
+   */
+  _drawInspectedIndicator(ctx, creature, now) {
+    const ix = creature.position.x;
+    const iy = creature.position.y;
+    const ir = creature.radius + 15;
+    const pulse = 0.5 + 0.5 * Math.sin(now * 0.005);
+    ctx.save();
+
+    // Inner glowing breathing ring
+    ctx.beginPath();
+    ctx.arc(ix, iy, ir, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.45 + pulse * 0.35})`;
+    ctx.lineWidth = 1.4;
+    ctx.shadowColor = 'rgba(255, 255, 255, 0.85)';
+    ctx.shadowBlur = 12;
+    ctx.stroke();
+
+    // Outer rotating celestial reticle
+    ctx.beginPath();
+    ctx.arc(ix, iy, ir + 6, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(224, 231, 255, ${0.3 + pulse * 0.25})`;
+    ctx.lineWidth = 1.0;
+    ctx.setLineDash([5, 7]);
+    ctx.stroke();
+
+    // 4 cardinal star pips
+    const rot = now * 0.0012;
+    for (let i = 0; i < 4; i++) {
+      const a = rot + (i * Math.PI) / 2;
+      const px = ix + Math.cos(a) * (ir + 10);
+      const py = iy + Math.sin(a) * (ir + 10);
+      ctx.beginPath();
+      ctx.arc(px, py, 1.8, 0, Math.PI * 2);
+      ctx.fillStyle = '#f8fafc';
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /**
+   * Render 4 mythical legendary mutations.
+   */
+  _drawLegendaryMutation(ctx, creature, now, breath) {
+    const trait = creature.legendaryTrait;
+    const px = creature.position.x;
+    const py = creature.position.y;
+
+    switch (trait) {
+      case 'twin_wings': {
+        const angle = creature.facingAngle;
+        const flap = Math.sin(now * 0.005 + creature.pulsePhase);
+        const wingSpan = creature.radius * 2.2;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(angle);
+        ctx.fillStyle = creature.color.toHSLAWithAlpha(0.22);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 0.9;
+        ctx.shadowColor = creature.color.toHSLA();
+        ctx.shadowBlur = 8;
+
+        // Left twin wing
+        ctx.beginPath();
+        ctx.moveTo(-creature.radius * 0.3, 0);
+        ctx.quadraticCurveTo(-wingSpan * 0.8, -wingSpan * (0.6 + flap * 0.25), -wingSpan * 1.2, -wingSpan * (0.2 + flap * 0.2));
+        ctx.quadraticCurveTo(-wingSpan * 0.6, 0, -creature.radius * 0.3, creature.radius * 0.4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Right twin wing
+        ctx.beginPath();
+        ctx.moveTo(-creature.radius * 0.3, 0);
+        ctx.quadraticCurveTo(-wingSpan * 0.8, wingSpan * (0.6 + flap * 0.25), -wingSpan * 1.2, wingSpan * (0.2 + flap * 0.2));
+        ctx.quadraticCurveTo(-wingSpan * 0.6, 0, -creature.radius * 0.3, -creature.radius * 0.4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+        break;
+      }
+      case 'stellar_halo': {
+        const hr = creature.radius * 1.65;
+        const rot = now * 0.0018;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(px, py, hr, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(253, 224, 71, 0.55)';
+        ctx.lineWidth = 1.2;
+        ctx.shadowColor = 'rgba(250, 204, 21, 0.85)';
+        ctx.shadowBlur = 10;
+        ctx.setLineDash([6, 6]);
+        ctx.stroke();
+
+        // 4 orbiting starlight diamonds
+        for (let i = 0; i < 4; i++) {
+          const a = rot + (i * Math.PI) / 2;
+          const sx = px + Math.cos(a) * hr;
+          const sy = py + Math.sin(a) * hr;
+          ctx.fillStyle = '#fffbeb';
+          ctx.beginPath();
+          ctx.arc(sx, sy, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+        break;
+      }
+      case 'abyssal_veins': {
+        const vr = creature.radius * 0.85;
+        const veinPulse = 0.5 + 0.5 * Math.sin(now * 0.004);
+        ctx.save();
+        ctx.strokeStyle = `rgba(56, 189, 248, ${0.45 + veinPulse * 0.4})`;
+        ctx.lineWidth = 1.0;
+        ctx.shadowColor = '#06b6d4';
+        ctx.shadowBlur = 8;
+        for (let i = 0; i < 4; i++) {
+          const va = (i * Math.PI * 2) / 4 + creature.pulsePhase;
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          const midX = px + Math.cos(va + 0.3) * (vr * 0.5);
+          const midY = py + Math.sin(va + 0.3) * (vr * 0.5);
+          const endX = px + Math.cos(va) * vr;
+          const endY = py + Math.sin(va) * vr;
+          ctx.quadraticCurveTo(midX, midY, endX, endY);
+          ctx.stroke();
+        }
+        ctx.restore();
+        break;
+      }
+      case 'prism_tail': {
+        const heading = creature.velocity.heading();
+        const colors = ['#f43f5e', '#fbbf24', '#34d399', '#38bdf8', '#a855f7'];
+        ctx.save();
+        ctx.lineWidth = 1.4;
+        for (let i = 0; i < colors.length; i++) {
+          const offset = (i - 2) * 2.2;
+          const length = creature.radius * (1.8 + i * 0.2);
+          const tailAngle = heading + Math.PI + Math.sin(now * 0.006 + i) * 0.35;
+          const tx = px + Math.cos(heading + Math.PI / 2) * offset;
+          const ty = py + Math.sin(heading + Math.PI / 2) * offset;
+          ctx.beginPath();
+          ctx.moveTo(tx, ty);
+          ctx.quadraticCurveTo(
+            tx + Math.cos(tailAngle) * (length * 0.5),
+            ty + Math.sin(tailAngle) * (length * 0.5),
+            tx + Math.cos(tailAngle) * length,
+            ty + Math.sin(tailAngle) * length
+          );
+          ctx.strokeStyle = colors[i];
+          ctx.shadowColor = colors[i];
+          ctx.shadowBlur = 6;
+          ctx.stroke();
+        }
+        ctx.restore();
+        break;
+      }
+    }
+  }
+
+  /**
+   * Render dual orbiting motes for chimera creatures.
+   */
+  _drawChimeraAura(ctx, creature, now) {
+    const cx = creature.position.x;
+    const cy = creature.position.y;
+    const r = creature.radius * 1.35;
+    const rot = now * 0.003;
+    ctx.save();
+
+    const m1x = cx + Math.cos(rot) * r;
+    const m1y = cy + Math.sin(rot) * r;
+    const m2x = cx + Math.cos(rot + Math.PI) * r;
+    const m2y = cy + Math.sin(rot + Math.PI) * r;
+
+    ctx.beginPath();
+    ctx.arc(m1x, m1y, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#fef08a';
+    ctx.shadowColor = '#facc15';
+    ctx.shadowBlur = 7;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(m2x, m2y, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#c084fc';
+    ctx.shadowColor = '#9333ea';
+    ctx.shadowBlur = 7;
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  /**
+   * Render living glowing flora spores floating in ether.
+   */
+  _drawSpores(ctx, spores, now) {
+    if (!spores || spores.length === 0) return;
+    ctx.save();
+    for (let i = 0; i < spores.length; i++) {
+      const s = spores[i];
+      const alpha = Math.max(0, Math.min(1, s.life * 0.85));
+      const pulse = 0.8 + 0.2 * Math.sin(now * 0.006 + i);
+      const r = s.radius * pulse;
+
+      const grad = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, r * 2.5);
+      grad.addColorStop(0, s.color.toHSLAWithAlpha(alpha));
+      grad.addColorStop(0.5, s.color.toHSLAWithAlpha(alpha * 0.4));
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, r * 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#fffdf0';
+      ctx.shadowColor = s.color.toHSLA();
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, Math.max(1, r * 0.45), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /**
+   * Render cosmic player call acoustic ripples.
+   */
+  _drawPlayerCalls(ctx, calls, now) {
+    if (!calls || calls.length === 0) return;
+    ctx.save();
+    for (let i = 0; i < calls.length; i++) {
+      const c = calls[i];
+      const alpha = Math.max(0, Math.min(1, c.life * 0.7));
+      if (alpha <= 0.01) continue;
+
+      for (let rOff = 0; rOff < 3; rOff++) {
+        const waveR = Math.max(1, c.radius - rOff * 16);
+        if (waveR <= 0) continue;
+        const waveAlpha = alpha * (1 - rOff * 0.28);
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, waveR, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(254, 240, 138, ${waveAlpha})`;
+        ctx.lineWidth = 1.4 - rOff * 0.3;
+        ctx.shadowColor = 'rgba(253, 224, 71, 0.8)';
+        ctx.shadowBlur = 10;
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
   }
 }
 

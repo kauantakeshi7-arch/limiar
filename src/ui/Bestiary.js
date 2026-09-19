@@ -1,3 +1,5 @@
+import { Config } from '../core/Config.js';
+
 /**
  * Bestiary — Tracks discovered creature forms and rare phenomena.
  * Drives the bestiary overlay UI.
@@ -22,9 +24,12 @@ export class Bestiary {
       ['serpentine',  { label: 'Serpente do Limiar',    discovered: false, icon: '🐉', hint: 'Um ser articulado multi-segmentado.' }],
       ['crystal',     { label: 'Radiolário Sagrado',    discovered: false, icon: '💎', hint: 'Uma geometria viva que refrata prismas.' }],
       ['lineage',     { label: 'Nova Geração',          discovered: false, icon: '🌱', hint: 'Um filhote nascido da Dança dos Opostos.' }],
+      ['legendary',   { label: 'Despertar Mítico',      discovered: false, icon: '🌟', hint: 'Uma mutação lendária despertou na linhagem.' }],
+      ['chimera',     { label: 'Quimera Simbiótica',    discovered: false, icon: '☯️', hint: 'Dois seres de anatomias distintas fundiram-se.' }],
     ]);
 
     this._element = document.getElementById('bestiary-entries');
+    this._loadFromStorage();
     this._renderAll();
   }
 
@@ -37,6 +42,12 @@ export class Bestiary {
     }
     if (creature.generation > 1) {
       this.unlock('lineage', creature);
+    }
+    if (creature.legendaryTrait) {
+      this.unlock('legendary', creature);
+    }
+    if (creature.isChimera) {
+      this.unlock('chimera', creature);
     }
   }
 
@@ -51,12 +62,38 @@ export class Bestiary {
 
     entry.discovered = true;
     entry.context    = context;
+    this._saveToStorage();
     this._renderEntry(key, entry, true);
 
     // Mark crossing when a creature transforms
     if (key === 'transformed' && !this._entries.get('crossing').discovered) {
       this.unlock('crossing', context);
     }
+  }
+
+  _loadFromStorage() {
+    try {
+      const saved = localStorage.getItem(Config.STORAGE?.BESTIARY_KEY || 'limiar_bestiary_v1');
+      if (saved) {
+        const discoveredKeys = JSON.parse(saved);
+        if (Array.isArray(discoveredKeys)) {
+          for (const key of discoveredKeys) {
+            const entry = this._entries.get(key);
+            if (entry) entry.discovered = true;
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  _saveToStorage() {
+    try {
+      const discoveredKeys = [];
+      for (const [key, entry] of this._entries) {
+        if (entry.discovered) discoveredKeys.push(key);
+      }
+      localStorage.setItem(Config.STORAGE?.BESTIARY_KEY || 'limiar_bestiary_v1', JSON.stringify(discoveredKeys));
+    } catch (_) {}
   }
 
   get discoveredCount() {
@@ -91,6 +128,6 @@ export class Bestiary {
       : `<span class="b-icon">?</span><span class="b-label b-unknown">${entry.hint}</span>`;
 
     if (!existing) this._element.appendChild(el);
-    if (isNew) setTimeout(() => el.classList.remove('new'), 800);
+    if (isNew) setTimeout(() => el?.classList?.remove?.('new'), 800);
   }
 }

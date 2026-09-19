@@ -178,7 +178,43 @@ export class Threshold {
       }
 
       reed.angle += (targetAngle - reed.angle) * 0.09;
+      if (reed.sporeCooldown > 0) {
+        reed.sporeCooldown -= dt;
+      }
     }
+  }
+
+  /**
+   * Brush across flora reeds with finger/pointer, causing deflection and releasing nutritious spores.
+   * @param {number} px - Pointer X in canvas space.
+   * @param {number} py - Pointer Y in canvas space.
+   * @param {number} canvasWidth
+   * @returns {Array<{x:number, y:number, side:number}>}
+   */
+  brushFlora(px, py, canvasWidth) {
+    if (Math.abs(py - this._currentY) > 52) return [];
+
+    const released = [];
+    for (let i = 0; i < this.flora.length; i++) {
+      const reed = this.flora[i];
+      const rx = reed.u * canvasWidth;
+      const dx = px - rx;
+      if (Math.abs(dx) < (Config.INTERACTION_EXPANDED?.FLORA_BRUSH_RADIUS || 42)) {
+        // Deflect reed in direction of stroke
+        reed.angle += dx > 0 ? 0.45 : -0.45;
+
+        // Release glowing living spore if cooldown expired
+        if (!reed.sporeCooldown || reed.sporeCooldown <= 0) {
+          reed.sporeCooldown = 2800; // ms cooldown per reed
+          released.push({
+            x: rx + (Math.random() - 0.5) * 8,
+            y: this._currentY + reed.side * 18,
+            side: reed.side,
+          });
+        }
+      }
+    }
+    return released;
   }
 
   // ── Zone helpers ──────────────────────────────────────────────────────────
