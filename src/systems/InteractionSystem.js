@@ -219,6 +219,8 @@ export class InteractionSystem {
   }
 
   _canInteract(a, b, now) {
+    if (!a.isAlive || !b.isAlive) return false;
+    if (a.bondedWith || b.bondedWith || a.isDancing || b.isDancing) return false;
     const aCooldown = a.interactionCooldowns.get(b.id) ?? 0;
     const bCooldown = b.interactionCooldowns.get(a.id) ?? 0;
     return now > aCooldown && now > bCooldown;

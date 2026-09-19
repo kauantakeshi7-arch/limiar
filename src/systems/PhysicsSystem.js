@@ -8,14 +8,14 @@ import { globalBus, Events } from '../core/EventEmitter.js';
 const BOIDS = Object.freeze({
   WANDER:           1.0,
   SEPARATION:       1.8,
-  COHESION:         0.45,   // gentle pull toward flock center
-  ALIGNMENT:        0.60,   // moderate velocity matching
+  COHESION:         0.22,   // gentle, calm pull toward flock center (prevents clumping)
+  ALIGNMENT:        0.55,   // moderate velocity matching
   ZONE_ATTRACTION:  0.15,
   BOUNDARY:         1.5,
   THRESHOLD_AVOID:  0.5,
   WIND:             0.28,
-  COHESION_RADIUS:  130,
-  ALIGNMENT_RADIUS: 95,
+  COHESION_RADIUS:  105,
+  ALIGNMENT_RADIUS: 90,
 });
 
 /**
@@ -86,12 +86,19 @@ export class PhysicsSystem {
         const dy      = b.position.y - a.position.y;
         const distSq  = dx * dx + dy * dy;
         const minDist = a.radius + b.radius;
-
-        if (distSq < minDist * minDist && distSq > 0.001) {
-          const dist    = Math.sqrt(distSq);
+        if (distSq < minDist * minDist) {
+          let nx, ny, dist;
+          if (distSq <= 0.0001) {
+            // Degenerate stack: assign deterministic separation normal
+            nx = 1;
+            ny = 0;
+            dist = 0;
+          } else {
+            dist = Math.sqrt(distSq);
+            nx = dx / dist;
+            ny = dy / dist;
+          }
           const overlap = (minDist - dist) * 0.5;
-          const nx      = dx / dist;
-          const ny      = dy / dist;
           // Push apart along collision normal — equal share for equal mass
           a.position.x -= nx * overlap;
           a.position.y -= ny * overlap;
@@ -193,36 +200,50 @@ export class PhysicsSystem {
     // Conscious AI Decision steering (calm, organic impulses)
     let decisionX = 0, decisionY = 0;
     if (creature.decisionTarget && creature.decision !== 'cruise') {
-      const tx = creature.decisionTarget.x ?? creature.decisionTarget.position?.x ?? px;
-      const ty = creature.decisionTarget.y ?? creature.decisionTarget.position?.y ?? py;
-      const tdx = tx - px;
-      const tdy = ty - py;
-      const tDist = Math.hypot(tdx, tdy) || 1;
-      const invT = 1 / tDist;
+      const target = creature.decisionTarget;
+      if (target.isAlive === false) {
+        creature.decisionTarget = null;
+        creature.decision = 'cruise';
+        creature.decisionLockMs = 0;
+      } else {
+        const tx = target.x ?? target.position?.x ?? px;
+        const ty = target.y ?? target.position?.y ?? py;
+        const tdx = tx - px;
+        const tdy = ty - py;
+        const tDist = Math.hypot(tdx, tdy) || 1;
+        const invT = 1 / tDist;
 
-      if (creature.decision === 'flee') {
-        // Calm retreat from threat or dangerous threshold
-        decisionX -= tdx * invT * 1.15;
-        decisionY -= tdy * invT * 1.15;
-      } else if (creature.decision === 'forage') {
-        // Purposeful yet gentle swim toward food / nectar
-        decisionX += tdx * invT * 0.95;
-        decisionY += tdy * invT * 0.95;
-        if (tDist < 28 && !activeNectar) {
-          creature.favoriteCoord = null;
-          creature.decisionTarget = null;
-          creature.decision = 'cruise';
+        if (creature.decision === 'flee') {
+          // Calm retreat from threat or dangerous threshold
+          decisionX -= tdx * invT * 1.15;
+          decisionY -= tdy * invT * 1.15;
+        } else if (creature.decision === 'forage') {
+          // Purposeful yet gentle swim toward food / nectar
+          decisionX += tdx * invT * 0.95;
+          decisionY += tdy * invT * 0.95;
+          if (tDist < 28 && !activeNectar) {
+            creature.favoriteCoord = null;
+            creature.decisionTarget = null;
+            creature.decision = 'cruise';
+          }
+        } else if (creature.decision === 'court') {
+          // If the courtship target is already dancing or sleeping, release suitor
+          if (target.isDancing || target.isSleeping) {
+            creature.decisionTarget = null;
+            creature.decision = 'cruise';
+            creature.decisionLockMs = 0;
+          } else {
+            // Serene approach toward opposite dance partner
+            decisionX += tdx * invT * 0.80;
+            decisionY += tdy * invT * 0.80;
+          }
+        } else if (creature.decision === 'play') {
+          // Inquisitive circling around player's touch
+          const tangentX = -tdy * invT;
+          const tangentY = tdx * invT;
+          decisionX += (tdx * invT * 0.60) + (tangentX * 0.40);
+          decisionY += (tdy * invT * 0.60) + (tangentY * 0.40);
         }
-      } else if (creature.decision === 'court') {
-        // Serene approach toward opposite dance partner
-        decisionX += tdx * invT * 0.80;
-        decisionY += tdy * invT * 0.80;
-      } else if (creature.decision === 'play') {
-        // Inquisitive circling around player's touch
-        const tangentX = -tdy * invT;
-        const tangentY = tdx * invT;
-        decisionX += (tdx * invT * 0.60) + (tangentX * 0.40);
-        decisionY += (tdy * invT * 0.60) + (tangentY * 0.40);
       }
     }
 
@@ -407,11 +428,11 @@ export class PhysicsSystem {
    *    distant solitary members; it never tightens an already-close cluster.
    */
   _flocking(creature, allCreatures) {
-    const isMobile   = this.width <= 600;
-    const baseSepR   = isMobile ? 32 : Config.STEERING.SEPARATION_RADIUS; // 40 desktop
-    const cohRadius  = BOIDS.COHESION_RADIUS;   // 130
-    const alignRadius = BOIDS.ALIGNMENT_RADIUS; // 95
-    const rA         = creature.radius;
+    const isMobile    = this.width <= 600;
+    const baseSepR    = isMobile ? 44 : Config.STEERING.SEPARATION_RADIUS; // 44 mobile, 40 desktop
+    const cohRadius   = isMobile ? 75 : BOIDS.COHESION_RADIUS;             // 75 mobile, 105 desktop
+    const alignRadius = isMobile ? 70 : BOIDS.ALIGNMENT_RADIUS;            // 70 mobile, 90 desktop
+    const rA          = creature.radius;
 
     const maxDist   = Math.max(baseSepR * 2.5, cohRadius, alignRadius);
     const maxDistSq = maxDist * maxDist;
@@ -419,6 +440,7 @@ export class PhysicsSystem {
     let sepX = 0, sepY = 0;
     let cohSumX = 0, cohSumY = 0, cohWeightSum = 0;
     let alignSumVx = 0, alignSumVy = 0, alignWeightSum = 0;
+    let hasCrowdedNeighbour = false;
 
     const px   = creature.position.x;
     const py   = creature.position.y;
@@ -437,10 +459,11 @@ export class PhysicsSystem {
       const rB   = other.radius;
 
       // ── 1. Separation (all creatures, radius-aware) ──────────────────────
-      const minComfort = Math.max(baseSepR, (rA + rB) * 1.75);
+      const minComfort = Math.max(baseSepR, (rA + rB) * 1.9);
       if (dist < minComfort) {
+        hasCrowdedNeighbour = true;
         const t      = dist / minComfort;
-        const repStr = Math.pow(1 - t, 2) * 2.2; // inverse-quadratic, strong near-field
+        const repStr = Math.pow(1 - t, 2) * 2.4; // inverse-quadratic, strong near-field
         const invD   = 1 / dist;
         sepX -= dx * invD * repStr;               // compounded per neighbour, not averaged
         sepY -= dy * invD * repStr;
@@ -448,7 +471,7 @@ export class PhysicsSystem {
 
       // ── 2. Cohesion & Alignment (same zone only) ─────────────────────────
       if (other.originZone === zone) {
-        // Cohesion: only when genuinely distant — never tighten a close cluster
+        // Cohesion: only when genuinely distant — never tighten an existing cluster
         const cohInhibitDist = (rA + rB) * 2.5;
         if (dist > cohInhibitDist && dist < cohRadius) {
           const w      = 1 - dist / cohRadius;
@@ -466,9 +489,9 @@ export class PhysicsSystem {
       }
     }
 
-    // ── Normalise cohesion ────────────────────────────────────────────────────
+    // ── Normalise cohesion (completely inhibited if already feeling crowded) ──
     let cohForceX = 0, cohForceY = 0;
-    if (cohWeightSum > 0.01) {
+    if (!hasCrowdedNeighbour && cohWeightSum > 0.01) {
       const toCenterX = (cohSumX / cohWeightSum) - px;
       const toCenterY = (cohSumY / cohWeightSum) - py;
       const cDist     = Math.sqrt(toCenterX * toCenterX + toCenterY * toCenterY);
@@ -501,14 +524,16 @@ export class PhysicsSystem {
   _zoneAttraction(creature, threshold) {
     if (creature.state !== CreatureState.NATIVE) return { x: 0, y: 0 };
 
+    // Unique vertical altitude per creature based on DNA adaptation (prevents single-line stacking)
+    const depthOffset = creature.dna ? (creature.dna.adaptation - 0.5) * 0.30 : 0;
     const homeY = creature.originZone === Config.ZONE.LIGHT
-      ? threshold.y * 0.45
-      : threshold.y + (this.height - threshold.y) * 0.5;
+      ? threshold.y * (0.45 + depthOffset)
+      : threshold.y + (this.height - threshold.y) * (0.50 + depthOffset);
 
     const dy = homeY - creature.position.y;
     const distY = Math.abs(dy);
 
-    if (distY < 45) return { x: 0, y: 0 };
+    if (distY < 40) return { x: 0, y: 0 };
     const scale = Math.min(distY / 220, 1.0);
     return { x: 0, y: (dy > 0 ? 1 : -1) * scale };
   }
@@ -545,7 +570,7 @@ export class PhysicsSystem {
     }
 
     // Corner trap deflection: if near two walls, push strongly to open centre
-    const cornerZone = margin * 0.65;
+    const cornerZone = margin * 0.90;
     if ((distL < cornerZone || distR < cornerZone) && (distT < cornerZone || distB < cornerZone)) {
       const cy = homeY ?? (this.height * 0.5);
       const toCX = (this.width * 0.5) - x;
@@ -589,17 +614,21 @@ export class PhysicsSystem {
     if (creature.position.x < pad) {
       creature.position.x = pad;
       vx = Math.max(Math.abs(vx), minExit) * 0.85; // reflect towards right, soft membrane damping
+      if (creature.wanderTarget) creature.wanderTarget.x = Math.abs(creature.wanderTarget.x);
     } else if (creature.position.x > this.width - pad) {
       creature.position.x = this.width - pad;
       vx = -Math.max(Math.abs(vx), minExit) * 0.85; // reflect towards left
+      if (creature.wanderTarget) creature.wanderTarget.x = -Math.abs(creature.wanderTarget.x);
     }
 
     if (creature.position.y < pad) {
       creature.position.y = pad;
       vy = Math.max(Math.abs(vy), minExit) * 0.85; // reflect downward
+      if (creature.wanderTarget) creature.wanderTarget.y = Math.abs(creature.wanderTarget.y);
     } else if (creature.position.y > this.height - pad) {
       creature.position.y = this.height - pad;
       vy = -Math.max(Math.abs(vy), minExit) * 0.85; // reflect upward
+      if (creature.wanderTarget) creature.wanderTarget.y = -Math.abs(creature.wanderTarget.y);
     }
 
     creature.velocity.set(vx, vy);
@@ -671,6 +700,12 @@ export class PhysicsSystem {
       if (!creature.bondedWith || processed.has(creature.id)) continue;
 
       const partner = creature.bondedWith;
+      if (!partner || !partner.isAlive) {
+        creature.bondedWith = null;
+        creature.isChimera = false;
+        creature.transitionTo(creature.zone === creature.originZone ? CreatureState.NATIVE : CreatureState.TRANSFORMED);
+        continue;
+      }
       processed.add(creature.id);
       processed.add(partner.id);
 
@@ -713,6 +748,30 @@ export class PhysicsSystem {
         // Disperse with a gentle energy flash & boost
         creature.metabolicFlash = 1.0;
         partner.metabolicFlash = 1.0;
+
+        // Radial outward dispersion impulse so parents drift apart peacefully
+        const dxA = creature.position.x - midX;
+        const dyA = creature.position.y - midY;
+        const distA = Math.hypot(dxA, dyA) || 1;
+        creature.velocity.x = (dxA / distA) * Config.CREATURE.BASE_SPEED * 1.5;
+        creature.velocity.y = (dyA / distA) * Config.CREATURE.BASE_SPEED * 1.5;
+
+        const dxB = partner.position.x - midX;
+        const dyB = partner.position.y - midY;
+        const distB = Math.hypot(dxB, dyB) || 1;
+        partner.velocity.x = (dxB / distB) * Config.CREATURE.BASE_SPEED * 1.5;
+        partner.velocity.y = (dyB / distB) * Config.CREATURE.BASE_SPEED * 1.5;
+
+        const cooldownUntil = Date.now() + 12000;
+        creature.interactionCooldowns.set(partner.id, cooldownUntil);
+        partner.interactionCooldowns.set(creature.id, cooldownUntil);
+        creature.decision = 'cruise';
+        partner.decision = 'cruise';
+        creature.decisionTarget = null;
+        partner.decisionTarget = null;
+        creature.decisionLockMs = 1600;
+        partner.decisionLockMs = 1600;
+
         // Birth of a new generation offspring from the sacred dance
         globalBus.emit(Events.CREATURE_BORN, {
           parentA: creature,

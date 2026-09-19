@@ -38,6 +38,7 @@ export class Renderer {
     this.ctx    = canvas.getContext('2d');
     // Mobile DPR optimized at 1.5 (Retina crisp, 0% stutter, saves >44% GPU fill rate)
     const isMobile = typeof window !== 'undefined' && window.innerWidth <= 600;
+    this._isMobile = isMobile;
     this._dpr   = isMobile ? Math.min(window.devicePixelRatio || 1, 1.5) : Math.min(window.devicePixelRatio || 1, 2.0);
     this._time  = 0;
 
@@ -67,6 +68,7 @@ export class Renderer {
 
   resize() {
     const isMobile = window.innerWidth <= 600;
+    this._isMobile = isMobile;
     this._dpr = isMobile ? Math.min(window.devicePixelRatio || 1, 1.5) : Math.min(window.devicePixelRatio || 1, 2.0);
     const w   = window.innerWidth;
     const h   = window.innerHeight;
@@ -1298,6 +1300,7 @@ export class Renderer {
   _drawParticles(ctx, particles) {
     ctx.save();
     const active = particles.active;
+    const canGlow = !this._isMobile;
     for (let i = 0; i < active.length; i++) {
       const p = active[i];
       const alpha = p.alpha * p.life;
@@ -1306,9 +1309,9 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(p.x, p.y, Math.max(0.5, p.radius * p.life), 0, Math.PI * 2);
       ctx.fillStyle = p.hsla || p.color.toHSLA();
-      if (p.radius > 2.5) {
+      if (canGlow && p.radius > 2.8) {
         ctx.shadowColor = p.hsla || p.color.toHSLA();
-        ctx.shadowBlur  = p.radius * 3;
+        ctx.shadowBlur  = p.radius * 2.5;
       } else {
         ctx.shadowBlur  = 0;
       }

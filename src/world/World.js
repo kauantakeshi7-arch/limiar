@@ -543,6 +543,21 @@ export class World {
         this.audio.removeCreature(c.id);
         // Leave a ghost echo where the creature died
         this._renderer?.registerEcho(c);
+
+        // Break symbiotic bond and clean up partner references
+        if (c.bondedWith) {
+          const partner = c.bondedWith;
+          partner.bondedWith = null;
+          partner.isChimera = false;
+          if (partner.state === CreatureState.SYMBIOTIC) {
+            partner.transitionTo(partner.zone === partner.originZone ? CreatureState.NATIVE : CreatureState.TRANSFORMED);
+          }
+          c.bondedWith = null;
+        }
+        if (c.dancePartner) {
+          c.dancePartner.endDance();
+          c.dancePartner = null;
+        }
       }
     }
     this.creatures.length = writeIdx;

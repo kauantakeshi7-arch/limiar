@@ -43,7 +43,8 @@ export class EvolutionSystem {
   // ── Zone detection ────────────────────────────────────────────────────────
 
   _updateZoneDetection(creatures, threshold, now) {
-    for (const creature of creatures) {
+    for (let i = 0; i < creatures.length; i++) {
+      const creature = creatures[i];
       if (!creature.isAlive) continue;
 
       const currentZone = threshold.getZoneAtY(creature.position.y);
@@ -92,7 +93,8 @@ export class EvolutionSystem {
   // ── Transformation progress ───────────────────────────────────────────────
 
   _updateTransformations(creatures, now, dt, particles, audio) {
-    for (const creature of creatures) {
+    for (let i = 0; i < creatures.length; i++) {
+      const creature = creatures[i];
       if (!creature.isAlive) continue;
 
       if (creature.state === CreatureState.CROSSING) {
@@ -162,7 +164,7 @@ export class EvolutionSystem {
     }
 
     creature.radius = Math.max(0, creature.radius - 0.04);
-    creature.color  = creature.color.withAlpha(Math.max(0, creature.color.a - 0.003));
+    creature.color.a = Math.max(0, creature.color.a - 0.003);
 
     if (creature.radius <= 1 || creature.color.a <= 0) {
       creature.isAlive = false;
@@ -338,7 +340,8 @@ export class EvolutionSystem {
    * @param {import('../fx/ParticleSystem.js').ParticleSystem} particles
    */
   _updateAging(creatures, dt, particles) {
-    for (const c of creatures) {
+    for (let i = 0; i < creatures.length; i++) {
+      const c = creatures[i];
       if (!c.isAlive) continue;
       // Transcendent and symbiotic creatures are exempt from aging
       if (c.state === CreatureState.TRANSCENDENT ||
@@ -362,7 +365,7 @@ export class EvolutionSystem {
         c.baseRadius = c.radius;
         // Fade alpha gently
         if (c.color.a > 0.05) {
-          c.color = c.color.withAlpha(Math.max(0.05, c.color.a - 0.0002 * dt));
+          c.color.a = Math.max(0.05, c.color.a - 0.0002 * dt);
         }
         // Natural death when too small
         if (c.radius <= 2.5) {
