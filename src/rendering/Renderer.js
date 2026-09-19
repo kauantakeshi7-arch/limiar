@@ -2270,6 +2270,7 @@ export class Renderer {
     for (let i = 0; i < spores.length; i++) {
       const s = spores[i];
       const alpha = Math.max(0, Math.min(1, s.life * 0.85));
+      const pulse = 1.0 + 0.15 * Math.sin(now * 0.005 + i);
       const r = Math.max(1, s.radius * pulse);
       const outerR = Math.max(1.5, r * 2.5);
 

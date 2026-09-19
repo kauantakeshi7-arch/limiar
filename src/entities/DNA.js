@@ -149,6 +149,13 @@ export class DNA {
     for (const key of DNA._GENE_KEYS) {
       genes[key] = this[key] + Random.float(-strength, strength);
     }
+    genes.legendaryTrait = this.legendaryTrait;
+    if (!genes.legendaryTrait && Random.chance(Config.LEGENDARY?.MUTATION_CHANCE_BASE || 0.035)) {
+      const allTraits = Object.values(Config.LEGENDARY?.TRAITS || {});
+      if (allTraits.length > 0) {
+        genes.legendaryTrait = allTraits[Math.floor(Math.random() * allTraits.length)];
+      }
+    }
     return new DNA(genes);
   }
 
@@ -161,6 +168,12 @@ export class DNA {
     const genes = {};
     for (const key of DNA._GENE_KEYS) {
       genes[key] = Random.next();
+    }
+    if (Random.chance(Config.LEGENDARY?.MUTATION_CHANCE_BASE || 0.035)) {
+      const allTraits = Object.values(Config.LEGENDARY?.TRAITS || {});
+      if (allTraits.length > 0) {
+        genes.legendaryTrait = allTraits[Math.floor(Math.random() * allTraits.length)];
+      }
     }
     return new DNA(genes);
   }

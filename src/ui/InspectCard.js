@@ -16,6 +16,7 @@ export class InspectCard {
 
   _bindEvents() {
     if (!this._container) return;
+    this._container.addEventListener('pointerdown', (e) => e.stopPropagation());
     const closeBtn = this._container.querySelector('.inspect-close');
     if (closeBtn) {
       closeBtn.addEventListener('click', (e) => {

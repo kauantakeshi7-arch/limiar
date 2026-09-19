@@ -123,7 +123,7 @@ export class AudioEngine {
    * @param {number} ratio - Y ratio (0 = top, 1 = bottom).
    */
   pluckThreshold(ratio) {
-    if (!this._initialized) return;
+    if (!this._initialized || this.isMuted) return;
     const now = this._ctx.currentTime;
     if (this._lastPluckTime && now - this._lastPluckTime < 0.14) return;
     this._lastPluckTime = now;
@@ -151,7 +151,7 @@ export class AudioEngine {
    * @param {number} xRatio - 0 (left) to 1 (right).
    */
   pluckHarp(xRatio) {
-    if (!this._initialized) return;
+    if (!this._initialized || this.isMuted) return;
     const now = this._ctx.currentTime;
     if (this._lastHarpTime && now - this._lastHarpTime < 0.07) return;
     this._lastHarpTime = now;
@@ -197,7 +197,7 @@ export class AudioEngine {
    * @param {number} [xRatio=0.5]
    */
   playNectarChime(xRatio = 0.5) {
-    if (!this._initialized) return;
+    if (!this._initialized || this.isMuted) return;
     const now = this._ctx.currentTime;
     const baseFreq = 523.25;
     [baseFreq, baseFreq * 1.5, baseFreq * 2].forEach((freq, i) => {
@@ -225,7 +225,7 @@ export class AudioEngine {
    * Harmonious chime when two opposite creatures perform the Courtship Dance.
    */
   playCourtship(xPos = 600, width = 1200) {
-    if (!this._initialized) return;
+    if (!this._initialized || this.isMuted) return;
     const now = this._ctx.currentTime;
     const root = 220;
     [root, root * 1.5, root * 2.25].forEach((freq, i) => {
@@ -471,7 +471,7 @@ export class AudioEngine {
   }
 
   _playTone(freq, type, volume, duration) {
-    if (!this._initialized) return;
+    if (!this._initialized || this.isMuted) return;
     const osc  = this._ctx.createOscillator();
     const gain = this._makeGain(volume);
     osc.type = type;
