@@ -44,6 +44,10 @@ export class Renderer {
     /** @type {DissolutionEcho[]} */
     this._echoes = [];
 
+    // ── Pre-allocated pair tracking sets (zero-allocation render passes) ──
+    this._visitedDancingPairs = new Set();
+    this._bondedPairs        = new Set();
+
     // ── Pre-allocated wave points cache ───────────────────────────────────
     this._wavePointsCache = Array.from({ length: 91 }, () => [0, 0]);
   }
@@ -1068,7 +1072,8 @@ export class Renderer {
     if (!hasDancing) return;
 
     ctx.save();
-    const visitedPairs = new Set();
+    const visitedPairs = this._visitedDancingPairs;
+    visitedPairs.clear();
 
     for (let i = 0; i < creatures.length; i++) {
       const a = creatures[i];
@@ -1076,7 +1081,6 @@ export class Renderer {
       const b = a.dancePartner;
       const pairKey = a.id < b.id ? `${a.id}:${b.id}` : `${b.id}:${a.id}`;
       if (visitedPairs.has(pairKey)) continue;
-      visitedPairs.add(pairKey);
       visitedPairs.add(pairKey);
 
       const ax = a.position.x;
@@ -1178,7 +1182,8 @@ export class Renderer {
     }
 
     // Symbiotic bond — curved glowing cord
-    const bonded = new Set();
+    const bonded = this._bondedPairs;
+    bonded.clear();
     for (let i = 0; i < creatures.length; i++) {
       const c = creatures[i];
       if (c.isAlive && c.state === CreatureState.SYMBIOTIC && c.bondedWith?.isAlive && !bonded.has(c.id)) {

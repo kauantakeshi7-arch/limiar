@@ -52,6 +52,7 @@ export class Game {
     this._nectarSpawned  = false;
     this._callEmitted    = false;
     this._lastPointerY   = null;
+    this._touchDisturbances = [];
 
     this._bindInput();
     this._bindUI();
@@ -91,17 +92,32 @@ export class Game {
       const baseDt = Math.max(1, Math.min(rawDt, 33.3));
       const dt = baseDt * this._timeScale;
 
-      // Collect active touches + unique ripples without stacking forces
-      const activeTouches = Array.from(this._activePointers.values());
-      const freshRipples  = this._ripples
-        .filter(r => timestamp - r.startTime < 450)
-        .map(r => ({ x: r.x, y: r.y }));
+      // Collect active touches + unique fresh ripples without per-frame allocations
+      const touchDisturbances = this._touchDisturbances;
+      touchDisturbances.length = 0;
 
-      const touchDisturbances = [...activeTouches];
-      for (let i = 0; i < freshRipples.length; i++) {
-        const rip = freshRipples[i];
-        const nearActive = activeTouches.some(t => Math.hypot(t.x - rip.x, t.y - rip.y) < 28);
-        if (!nearActive) touchDisturbances.push(rip);
+      for (const pt of this._activePointers.values()) {
+        touchDisturbances.push(pt);
+      }
+      const activeTouchCount = touchDisturbances.length;
+
+      for (let i = 0; i < this._ripples.length; i++) {
+        const rip = this._ripples[i];
+        if (timestamp - rip.startTime < 450) {
+          let nearActive = false;
+          for (let j = 0; j < activeTouchCount; j++) {
+            const t = touchDisturbances[j];
+            const dx = t.x - rip.x;
+            const dy = t.y - rip.y;
+            if (dx * dx + dy * dy < 784) { // 28px squared
+              nearActive = true;
+              break;
+            }
+          }
+          if (!nearActive) {
+            touchDisturbances.push(rip);
+          }
+        }
       }
 
       this._world.update(timestamp, dt, touchDisturbances);
@@ -134,11 +150,18 @@ export class Game {
       // Update active inspect card telemetry
       this._inspectCard.update();
 
-      // Prune expired ripples (duration: 1800ms) and limit maximum concurrent ripples
+      // Prune expired ripples (duration: 1800ms) in-place without array reallocation
+      let rippleWriteIdx = 0;
+      for (let i = 0; i < this._ripples.length; i++) {
+        const r = this._ripples[i];
+        if (timestamp - r.startTime < 1800) {
+          this._ripples[rippleWriteIdx++] = r;
+        }
+      }
+      this._ripples.length = rippleWriteIdx;
       if (this._ripples.length > 20) {
         this._ripples.splice(0, this._ripples.length - 20);
       }
-      this._ripples = this._ripples.filter(r => timestamp - r.startTime < 1800);
 
       this._renderer.render({
         creatures:         this._world.creatures,

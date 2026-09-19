@@ -426,7 +426,13 @@ export class AudioEngine {
     const { osc, gain } = node;
     gain.gain.linearRampToValueAtTime(0, this._ctx.currentTime + 1.5);
     setTimeout(() => {
-      try { osc.stop(); } catch (_) {}
+      try {
+        osc.stop();
+        osc.disconnect();
+        gain.disconnect();
+        node.filter?.disconnect();
+        node.panner?.disconnect();
+      } catch (_) {}
     }, 1600);
 
     this._creatureNodes.delete(creatureId);

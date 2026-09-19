@@ -34,7 +34,7 @@ export class EvolutionSystem {
    */
   update(creatures, threshold, now, dt, particles, audio) {
     this._updateZoneDetection(creatures, threshold, now);
-    this._updateTransformations(creatures, now, particles, audio);
+    this._updateTransformations(creatures, now, dt, particles, audio);
     this._updateColorInterpolation(creatures, dt);
     this._updateRareEvents(creatures, threshold, now, dt, particles, audio);
     this._updateAging(creatures, dt, particles);
@@ -91,7 +91,7 @@ export class EvolutionSystem {
 
   // ── Transformation progress ───────────────────────────────────────────────
 
-  _updateTransformations(creatures, now, particles, audio) {
+  _updateTransformations(creatures, now, dt, particles, audio) {
     for (const creature of creatures) {
       if (!creature.isAlive) continue;
 
@@ -104,7 +104,7 @@ export class EvolutionSystem {
       }
 
       if (creature.state === CreatureState.WITNESS) {
-        creature.witnessTimer -= 16; // approx per frame
+        creature.witnessTimer -= dt;
         if (creature.witnessTimer <= 0) {
           creature.transitionTo(CreatureState.NATIVE);
         }
@@ -250,10 +250,24 @@ export class EvolutionSystem {
     if (creatures.length < 3) return;
     if (!Random.chance(Config.RARE.SINGULARITY_CHANCE)) return;
 
-    const alive = creatures.filter(c => c.isAlive && c.state === CreatureState.NATIVE);
-    if (!alive.length) return;
+    let nativeCount = 0;
+    for (let i = 0; i < creatures.length; i++) {
+      const c = creatures[i];
+      if (c.isAlive && c.state === CreatureState.NATIVE) nativeCount++;
+    }
+    if (!nativeCount) return;
 
-    const target = Random.choice(alive);
+    let pick = Math.floor(Math.random() * nativeCount);
+    let target = null;
+    for (let i = 0; i < creatures.length; i++) {
+      const c = creatures[i];
+      if (c.isAlive && c.state === CreatureState.NATIVE) {
+        if (pick === 0) { target = c; break; }
+        pick--;
+      }
+    }
+    if (!target) return;
+
     target.singularityGrow = true;
     this._singularityTarget = target;
     this._singularityEnd    = now + Config.RARE.SINGULARITY_DURATION_MS;
@@ -264,10 +278,24 @@ export class EvolutionSystem {
   _checkWitness(creatures, now) {
     if (!Random.chance(Config.RARE.WITNESS_CHANCE)) return;
 
-    const eligible = creatures.filter(c => c.isAlive && c.state === CreatureState.NATIVE);
-    if (!eligible.length) return;
+    let nativeCount = 0;
+    for (let i = 0; i < creatures.length; i++) {
+      const c = creatures[i];
+      if (c.isAlive && c.state === CreatureState.NATIVE) nativeCount++;
+    }
+    if (!nativeCount) return;
 
-    const witness = Random.choice(eligible);
+    let pick = Math.floor(Math.random() * nativeCount);
+    let witness = null;
+    for (let i = 0; i < creatures.length; i++) {
+      const c = creatures[i];
+      if (c.isAlive && c.state === CreatureState.NATIVE) {
+        if (pick === 0) { witness = c; break; }
+        pick--;
+      }
+    }
+    if (!witness) return;
+
     witness.transitionTo(CreatureState.WITNESS);
     witness.witnessTimer = Config.RARE.WITNESS_DURATION_MS;
     globalBus.emit(Events.RARE_WITNESS, witness);
@@ -277,16 +305,24 @@ export class EvolutionSystem {
     this._chainCooldown -= dt;
     if (this._chainCooldown > 0) return;
 
-    // Find creatures near the threshold moving toward it
-    const nearthreshold = creatures.filter(c => {
-      if (!c.isAlive || c.state !== CreatureState.NATIVE) return false;
-      const dist = Math.abs(c.position.y - threshold.y);
-      return dist < 60;
-    });
+    // Fast indexed count of native creatures near the threshold
+    let nearCount = 0;
+    for (let i = 0; i < creatures.length; i++) {
+      const c = creatures[i];
+      if (!c.isAlive || c.state !== CreatureState.NATIVE) continue;
+      if (Math.abs(c.position.y - threshold.y) < 60) nearCount++;
+    }
 
-    if (nearthreshold.length >= Config.RARE.CHAIN_MIN_COUNT) {
+    if (nearCount >= Config.RARE.CHAIN_MIN_COUNT) {
       this._chainCooldown = 30000; // 30s cooldown
-      globalBus.emit(Events.RARE_CHAIN, nearthreshold);
+      const nearThreshold = [];
+      for (let i = 0; i < creatures.length; i++) {
+        const c = creatures[i];
+        if (c.isAlive && c.state === CreatureState.NATIVE && Math.abs(c.position.y - threshold.y) < 60) {
+          nearThreshold.push(c);
+        }
+      }
+      globalBus.emit(Events.RARE_CHAIN, nearThreshold);
     }
   }
 
@@ -316,7 +352,7 @@ export class EvolutionSystem {
         c.isAging = true;
         // Emit a soft signal — a few slow particles drifting upward
         particles.emitTransformBurst(c.position.x, c.position.y, c.color.withAlpha(0.3));
-        globalBus.emit(Events.CREATURE_DISSOLVED, c); // reuse dissolved event for diary
+        c.expressThought(`${c.name} contempla serenamente seus últimos ciclos vitais.`);
       }
 
       if (c.isAging) {
@@ -331,6 +367,7 @@ export class EvolutionSystem {
         // Natural death when too small
         if (c.radius <= 2.5) {
           c.isAlive = false;
+          particles.emitDissolveBurst(c.position.x, c.position.y, c.color);
         }
       }
     }

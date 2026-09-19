@@ -205,7 +205,12 @@ export class DecisionSystem {
     if (senses.nectarTarget) {
       scores.forage = hunger * 1.4 + 0.55;
     } else if (creature.favoriteCoord && hunger > 0.45) {
-      scores.forage = hunger * 0.65;
+      const d = Math.hypot(creature.favoriteCoord.x - creature.position.x, creature.favoriteCoord.y - creature.position.y);
+      if (d < 30) {
+        creature.favoriteCoord = null; // Arrived at past memory, nothing remains
+      } else {
+        scores.forage = hunger * 0.65;
+      }
     }
 
     // 3. Court Utility: sociability + partner proximity near threshold
@@ -225,15 +230,14 @@ export class DecisionSystem {
       scores.rest = creature.fatigue * 1.1;
     }
 
-    // Find highest utility decision
+    // Find highest utility decision (zero allocation scalar comparison)
     let bestDecision = 'cruise';
-    let highestScore = -1;
-    for (const [action, score] of Object.entries(scores)) {
-      if (score > highestScore) {
-        highestScore = score;
-        bestDecision = action;
-      }
-    }
+    let highestScore = scores.cruise;
+    if (scores.flee > highestScore)   { highestScore = scores.flee;   bestDecision = 'flee';   }
+    if (scores.forage > highestScore) { highestScore = scores.forage; bestDecision = 'forage'; }
+    if (scores.court > highestScore)  { highestScore = scores.court;  bestDecision = 'court';  }
+    if (scores.play > highestScore)   { highestScore = scores.play;   bestDecision = 'play';   }
+    if (scores.rest > highestScore)   { highestScore = scores.rest;   bestDecision = 'rest';   }
 
     // Assign decision and target
     creature.decision = bestDecision;

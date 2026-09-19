@@ -149,29 +149,36 @@ export class Threshold {
       this.eclipseAlpha = Math.min(1, this.eclipseAlpha + 0.005);
     }
 
-    // Advance harp wave impulses
-    for (const hw of this.harpWaves) {
+    // Advance harp wave impulses and prune in-place without array reallocation
+    let hwWriteIdx = 0;
+    for (let i = 0; i < this.harpWaves.length; i++) {
+      const hw = this.harpWaves[i];
       hw.radius += hw.speed * dt;
       hw.life   -= dt * 0.0009;
+      if (hw.life > 0) {
+        this.harpWaves[hwWriteIdx++] = hw;
+      }
     }
-    this.harpWaves = this.harpWaves.filter(hw => hw.life > 0);
+    this.harpWaves.length = hwWriteIdx;
 
     // Advance flora reeds
     const windPush = (wind.x || 0) * 0.35;
     const velocityPush = this._velocity * 0.035;
 
-    for (const reed of this.flora) {
+    for (let r = 0; r < this.flora.length; r++) {
+      const reed = this.flora[r];
       reed.swayPhase += reed.swaySpeed * dt;
       const naturalSway = Math.sin(reed.swayPhase) * 0.18;
       let targetAngle = reed.baseAngle + naturalSway + windPush - velocityPush;
 
-      // Deflection by nearby swimming creatures
+      // Deflection by nearby swimming creatures (zero allocation indexed loop)
       const rx = reed.u * canvasWidth;
       const ry = this._currentY;
-      for (const c of creatures) {
-        if (!c.isAlive) continue;
-        const dx = rx - c.position.x;
-        const dy = ry - c.position.y;
+      for (let c = 0; c < creatures.length; c++) {
+        const cr = creatures[c];
+        if (!cr.isAlive) continue;
+        const dx = rx - cr.position.x;
+        const dy = ry - cr.position.y;
         if (dx * dx + dy * dy < 3600) {
           targetAngle += dx > 0 ? 0.38 : -0.38;
         }

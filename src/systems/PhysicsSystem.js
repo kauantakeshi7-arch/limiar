@@ -208,6 +208,11 @@ export class PhysicsSystem {
         // Purposeful yet gentle swim toward food / nectar
         decisionX += tdx * invT * 0.95;
         decisionY += tdy * invT * 0.95;
+        if (tDist < 28 && !activeNectar) {
+          creature.favoriteCoord = null;
+          creature.decisionTarget = null;
+          creature.decision = 'cruise';
+        }
       } else if (creature.decision === 'court') {
         // Serene approach toward opposite dance partner
         decisionX += tdx * invT * 0.80;
@@ -492,7 +497,7 @@ export class PhysicsSystem {
     };
   }
 
-  /** Zone attraction: gentle pull toward home zone center (zero-allocation scalar math). */
+  /** Zone attraction: gentle pull toward home zone altitude (zero-allocation vertical scalar math). */
   _zoneAttraction(creature, threshold) {
     if (creature.state !== CreatureState.NATIVE) return { x: 0, y: 0 };
 
@@ -500,13 +505,12 @@ export class PhysicsSystem {
       ? threshold.y * 0.45
       : threshold.y + (this.height - threshold.y) * 0.5;
 
-    const dx = (this.width * 0.5) - creature.position.x;
     const dy = homeY - creature.position.y;
-    const dist = Math.hypot(dx, dy);
+    const distY = Math.abs(dy);
 
-    if (dist < 70) return { x: 0, y: 0 };
-    const scale = Math.min(dist / 300, 1) / dist;
-    return { x: dx * scale, y: dy * scale };
+    if (distY < 45) return { x: 0, y: 0 };
+    const scale = Math.min(distY / 220, 1.0);
+    return { x: 0, y: (dy > 0 ? 1 : -1) * scale };
   }
 
   /**
