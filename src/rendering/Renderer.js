@@ -133,6 +133,8 @@ export class Renderer {
     inspectedCreature = null,
     diurnalFactor = 0.5,
     diurnalCycle = 0,
+    reefs = [],
+    tide = null,
     now,
     dt = 16
   }) {
@@ -191,9 +193,19 @@ export class Renderer {
       // 3. Light rays (light zone + sunburst flares + zenith warmth)
       this._drawLightAtmosphere(ctx, w, ty, now, ea, breath, sunburst, diurnalFactor, diurnalCycle);
 
+      // 3.5. Cosmic Tide Streamlines (Zen horizontal ether current)
+      if (tide && tide.factor > 0.005) {
+        this._drawCosmicTide(ctx, w, h, tide, now);
+      }
+
       // 5. Ambient floating particles (nudged by wind + weather spawns + creature grazing)
       this._updateAmbient(dt, w, h, ty, wind, sunburst, voidPulse, creatures);
       this._drawAmbient(ctx);
+
+      // 5.5. Ecological Sanctuaries & Polyp Reefs
+      if (reefs && reefs.length > 0) {
+        this._drawSanctuaries(ctx, reefs, now, w, h, wind, tide);
+      }
 
       // 6. Threshold (tension waves + harp impulses + living flora reeds + diurnal tint)
       this._drawThreshold(ctx, w, h, ty, ea, now, creatures, tension, breath, threshold, diurnalCycle);
@@ -539,6 +551,123 @@ export class Renderer {
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       ctx.fillStyle = p.hsl;
       ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // ── 3.5. Cosmic Tide Streamlines ──────────────────────────────────────────
+
+  _drawCosmicTide(ctx, w, h, tide, now) {
+    if (!tide || tide.factor < 0.005) return;
+
+    const tf = tide.factor;
+    const dir = tide.direction || 1;
+    const speed = 0.045 * dir;
+    const offset = (now * speed) % 80;
+
+    ctx.save();
+    // Subtle ether streamlines flowing horizontally across the screen
+    const lineCount = 5;
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([24, 48]);
+    ctx.lineDashOffset = -offset;
+
+    for (let i = 1; i <= lineCount; i++) {
+      const yBase = (h / (lineCount + 1)) * i;
+      const alpha = (0.05 + 0.04 * Math.sin(now * 0.001 + i)) * tf;
+
+      ctx.beginPath();
+      for (let x = 0; x <= w; x += 40) {
+        const y = yBase + Math.sin(x * 0.008 + now * 0.0012 + i) * 12;
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+
+      ctx.strokeStyle = `rgba(185, 215, 255, ${alpha})`;
+      ctx.shadowColor = 'rgba(160, 200, 255, 0.25)';
+      ctx.shadowBlur = 4;
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // ── 5.5. Ecological Sanctuaries & Spore Reefs ──────────────────────────────
+
+  _drawSanctuaries(ctx, reefs, now, w, h, wind = { x: 0, y: 0 }, tide = null) {
+    if (!reefs || reefs.length === 0) return;
+
+    const tideForceX = tide ? (tide.vector?.x || 0) * 18 : 0;
+    const windForceX = (wind?.x || 0) * 8;
+
+    ctx.save();
+    for (let rIdx = 0; rIdx < reefs.length; rIdx++) {
+      const reef = reefs[rIdx];
+      const bx = reef.baseX;
+      const by = reef.baseY;
+      const isLight = reef.zone === Config.ZONE.LIGHT;
+
+      // 1. Soft restorative aura (gentle nursery rest field)
+      const restR = Config.SANCTUARIES?.REST_ATTRACT_RADIUS || 140;
+      const restPulse = 0.5 + 0.5 * Math.sin(now * 0.0015 + (reef.pulsePhase || 0));
+      const restGrad = ctx.createRadialGradient(bx, by, 10, bx, by, restR);
+      const auraColor = isLight ? '255, 235, 170' : '170, 130, 240';
+      restGrad.addColorStop(0, `rgba(${auraColor}, ${0.08 + restPulse * 0.04})`);
+      restGrad.addColorStop(0.65, `rgba(${auraColor}, ${0.02 + restPulse * 0.02})`);
+      restGrad.addColorStop(1, `rgba(${auraColor}, 0)`);
+      ctx.fillStyle = restGrad;
+      ctx.beginPath();
+      ctx.arc(bx, by, restR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 2. Reef base mound / ethereal coral shelf
+      ctx.beginPath();
+      ctx.ellipse(bx, by, 34, 11, 0, 0, Math.PI * 2);
+      ctx.fillStyle = isLight ? 'rgba(235, 215, 155, 0.22)' : 'rgba(120, 85, 180, 0.22)';
+      ctx.fill();
+
+      // 3. Swaying stalks and glowing bioluminescent bulbs
+      const polyps = reef.polyps || [];
+      for (let pIdx = 0; pIdx < polyps.length; pIdx++) {
+        const polyp = polyps[pIdx];
+        const px = bx + polyp.offsetX;
+        const py = by;
+        const hStalk = polyp.height;
+        const dirY = isLight ? 1 : -1; // Light hangs downwards, shadow spires upward
+
+        const stalkSway = Math.sin(now * 0.0012 + polyp.phase) * 14 + windForceX + tideForceX;
+        const tipX = px + stalkSway;
+        const tipY = py + dirY * hStalk;
+        const midX = px + stalkSway * 0.45;
+        const midY = py + dirY * (hStalk * 0.55);
+
+        // Stalk stem
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.quadraticCurveTo(midX, midY, tipX, tipY);
+        ctx.strokeStyle = polyp.color.withAlpha(0.38).toHSLA();
+        ctx.lineWidth = 1.6;
+        ctx.stroke();
+
+        // Bioluminescent bulb at tip
+        const bulbP = 0.5 + 0.5 * Math.sin(reef.pulsePhase + polyp.phase);
+        const bRad = polyp.bulbRadius * (0.88 + 0.22 * bulbP);
+
+        // Bulb soft glow
+        ctx.beginPath();
+        ctx.arc(tipX, tipY, bRad * 2.2, 0, Math.PI * 2);
+        ctx.fillStyle = polyp.color.withAlpha(0.15 + bulbP * 0.12).toHSLA();
+        ctx.fill();
+
+        // Bulb solid core
+        ctx.beginPath();
+        ctx.arc(tipX, tipY, bRad, 0, Math.PI * 2);
+        ctx.fillStyle = polyp.color.withAlpha(0.75 + bulbP * 0.25).toHSLA();
+        ctx.shadowColor = polyp.color.toGlowHSLA(0.8);
+        ctx.shadowBlur = 8 + bulbP * 6;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
     }
     ctx.restore();
   }
@@ -1126,7 +1255,10 @@ export class Renderer {
 
     ctx.save();
     try {
-      ctx.globalAlpha = creature.color.a;
+      const ontogenyAlpha = creature.growthProgress !== undefined
+        ? (0.42 + 0.58 * creature.growthProgress)
+        : 1.0;
+      ctx.globalAlpha = creature.color.a * ontogenyAlpha;
 
       // Outer glow (harmonized with world breath)
       ctx.shadowColor = creature.color.toGlowHSLA(0.5);
@@ -1167,6 +1299,16 @@ export class Renderer {
 
       // Orbital motes (DNA echo gene)
       this._drawOrbitalMotes(ctx, creature, now);
+
+      // Zen Bioluminescence Communication Aura (Quorum Sensing gentle wave)
+      if (creature.glowIntensity > 0.01) {
+        this._drawBioluminescentEcho(ctx, creature, now);
+      }
+
+      // Ancestral Star Crown & Radiant Phosphorescent Halo
+      if (creature.isAncestral) {
+        this._drawAncestralCrown(ctx, creature, now);
+      }
 
       // Aging aura (subtle fading candle shimmer)
       if (creature.isAging) {
@@ -1261,6 +1403,70 @@ export class Renderer {
     ctx.fillStyle = isLight ? 'rgba(255, 240, 190, 0.75)' : 'rgba(220, 200, 255, 0.75)';
     ctx.fill();
 
+    ctx.restore();
+  }
+
+  _drawAncestralCrown(ctx, creature, now) {
+    const { x, y } = creature.position;
+    const r = Math.max(3, creature.radius * 1.52);
+    const pulse = 0.5 + 0.5 * Math.sin(now * 0.0018 + (creature.id.charCodeAt(0) || 0));
+
+    ctx.save();
+    // 1. Serene phosphorescent ancestral halo
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.strokeStyle = creature.originZone === Config.ZONE.LIGHT
+      ? `rgba(255, 235, 175, ${0.28 + pulse * 0.16})`
+      : `rgba(215, 185, 255, ${0.28 + pulse * 0.16})`;
+    ctx.lineWidth = 1.0;
+    ctx.shadowColor = ctx.strokeStyle;
+    ctx.shadowBlur = 12 + pulse * 6;
+    ctx.stroke();
+
+    // 2. Crown of 4 orbiting celestial micro-stars
+    const crownCount = 4;
+    const starSpeed = 0.00072;
+    const starRadius = r + 2.5;
+
+    for (let i = 0; i < crownCount; i++) {
+      const angle = (i / crownCount) * Math.PI * 2 + now * starSpeed;
+      const sx = x + Math.cos(angle) * starRadius;
+      const sy = y + Math.sin(angle) * starRadius;
+      const starPulse = 0.6 + 0.4 * Math.sin(now * 0.0035 + i * 1.57);
+
+      ctx.beginPath();
+      ctx.arc(sx, sy, 1.4 * starPulse, 0, Math.PI * 2);
+      ctx.fillStyle = creature.originZone === Config.ZONE.LIGHT
+        ? `rgba(255, 248, 220, ${0.75 * starPulse})`
+        : `rgba(235, 220, 255, ${0.75 * starPulse})`;
+      ctx.shadowColor = ctx.fillStyle;
+      ctx.shadowBlur = 6;
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  _drawBioluminescentEcho(ctx, creature, now) {
+    const intensity = Math.min(1.0, creature.glowIntensity || 0);
+    if (intensity < 0.01) return;
+
+    const { x, y } = creature.position;
+    const pulseRadius = creature.radius * (1.35 + intensity * 0.85);
+
+    ctx.save();
+    const grad = ctx.createRadialGradient(x, y, creature.radius * 0.3, x, y, pulseRadius);
+    const alphaPeak = 0.26 * intensity;
+    const isLight = creature.originZone === Config.ZONE.LIGHT;
+
+    const rgb = isLight ? '255, 235, 160' : '190, 150, 255';
+    grad.addColorStop(0, `rgba(${rgb}, ${alphaPeak})`);
+    grad.addColorStop(0.55, `rgba(${rgb}, ${alphaPeak * 0.45})`);
+    grad.addColorStop(1, `rgba(${rgb}, 0)`);
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, pulseRadius, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
   }
 

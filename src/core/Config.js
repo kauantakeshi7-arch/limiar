@@ -212,4 +212,48 @@ export const Config = Object.freeze({
     SNAP_CAPTURE_MS: 35,
   }),
 
+  // ── Zen Bioluminescence & Quorum Sensing ──────────────────────────────────
+  BIOLUMINESCENCE: Object.freeze({
+    WAVE_RADIUS: 120,            // Sensory radius for light communication
+    PROPAGATION_FACTOR: 0.44,    // Damped energy per hop (1.0 -> 0.44 -> 0.19 -> 0)
+    MAX_GENERATIONS: 2,          // Extinguishes softly after 2 hops to prevent visual noise
+    COOLDOWN_MS: 4500,           // Individual cooldown before creature can echo light again
+    PULSE_DURATION_MS: 1200,     // Gentle sine envelope duration
+    MIN_INTENSITY_TRIGGER: 0.20, // Threshold to trigger neighbor echoes
+  }),
+
+  // ── Ontogeny & Life Stages ────────────────────────────────────────────────
+  LIFE_STAGE: Object.freeze({
+    JUVENILE:  'juvenile',   // 0 to 35s: smaller (0.50 -> 1.0), translucent, agile
+    ADULT:     'adult',      // 35s to 120s: full morphology & reproductive readiness
+    ANCESTRAL: 'ancestral',  // > 120s: orbital star crown, long trails (24pts), luminous halo
+  }),
+
+  ONTOGENY: Object.freeze({
+    JUVENILE_DURATION_MS: 35_000,
+    ANCESTRAL_AGE_MS: 120_000,
+    JUVENILE_SCALE_MIN: 0.50,
+    JUVENILE_ALPHA_MIN: 0.42,
+    ANCESTRAL_TRAIL_LENGTH: 24,
+    ANCESTRAL_STARS_COUNT: 4,
+  }),
+
+  // ── Sanctuaries & Micro-Climates ──────────────────────────────────────────
+  SANCTUARIES: Object.freeze({
+    REEF_COUNT: 3,                 // 2 in Shadow abyss, 1 in Solar light
+    POLYP_COUNT_PER_REEF: 5,       // Organic stalks per cluster
+    SPORE_INTERVAL_MS: 3800,       // Interval between gentle spore emissions
+    REST_ATTRACT_RADIUS: 140,      // Creatures drawn to rest near reefs
+    REST_ENERGY_REGEN: 0.00018,    // Energy/vitality recovery per ms when resting
+    GROWTH_BONUS_SPORE: 0.08,      // Nutrient growth boost for juveniles
+  }),
+
+  // ── Periodic Cosmic Tides ─────────────────────────────────────────────────
+  TIDES: Object.freeze({
+    INTERVAL_MS: 50_000,           // Calm tide interval (~50s between tides)
+    DURATION_MS: 12_000,           // Tide transit duration (~12s)
+    FORCE: 0.42,                   // Gentle lateral acceleration
+  }),
+
 });
+

@@ -3,6 +3,7 @@ import { Color } from '../utils/Color.js';
 import { Random } from '../utils/Random.js';
 import { DNA } from './DNA.js';
 import { Config } from '../core/Config.js';
+import { globalBus, Events } from '../core/EventEmitter.js';
 
 let _nextId = 0;
 
@@ -82,13 +83,27 @@ export class Creature {
     this.witnessTimer     = 0;
     this.singularityGrow  = false;
 
-    // ── Natural lifecycle ─────────────────────────────────────────────────
+    // ── Natural lifecycle & Ontogeny ──────────────────────────────────────
     /** Time alive in ms. */
     this.age    = 0;
     /** Time in ms until natural decline begins (randomized 3–7 minutes). */
     this.maxAge = Random.float(180_000, 420_000);
     /** True when the creature has entered its natural decline phase. */
     this.isAging = false;
+
+    /** Ontogeny growth progress [0..1]. 0 = newborn juvenile, 1 = fully grown adult. */
+    this.isOffspring    = false;
+    this.growthProgress = 1.0;
+    this.nutrientBonus  = 0;
+    this.lifeStage      = Config.LIFE_STAGE?.ADULT || 'adult';
+    this.isAncestral    = false;
+    this.ancestralAnnounced = false;
+
+    // ── Zen Bioluminescence & Quorum Sensing ──────────────────────────────
+    /** Smooth glow pulse envelope [0..1] for calming quorum communication. */
+    this.glowIntensity     = 0;
+    /** Cooldown timer (ms) before this creature can echo another light wave. */
+    this.lightEchoCooldown = 0;
 
     // ── Metabolism ──────────────────────────────────────────────────────────
     /** Visual pulse [0..1] triggered when consuming ambient motes. */
@@ -192,6 +207,12 @@ export class Creature {
     }
   }
 
+  get lifeStageLabel() {
+    if (this.isAncestral) return 'Ancestral';
+    if (this.growthProgress < 0.98) return 'Filhote';
+    return 'Adulto';
+  }
+
   /** Temporarily express a conscious thought in the empathy card. */
   expressThought(text, duration = 3500) {
     this.customThought = text;
@@ -235,6 +256,12 @@ export class Creature {
         return 'Fatigada, flutuando calma para recuperar o alento vital.';
       case 'cruise':
       default:
+        if (this.isAncestral) {
+          return 'Venerável ancião cósmico, coroado por estrelas, guardando a harmonia dos mundos.';
+        }
+        if (this.lifeStage === (Config.LIFE_STAGE?.JUVENILE || 'juvenile')) {
+          return 'Jovem filhote explorando o cosmos com passos ligeiros e olhar curioso.';
+        }
         return 'Planando em paz pelas correntes térmicas do seu reino.';
     }
   }
@@ -274,7 +301,7 @@ export class Creature {
 
   /** Record current position into the trail history. Call once per frame. */
   pushTrail() {
-    const maxLen = 14;
+    const maxLen = this.isAncestral ? (Config.ONTOGENY?.ANCESTRAL_TRAIL_LENGTH || 24) : 14;
     const last   = this._trail[this._trail.length - 1];
     if (last) {
       const dx = this.position.x - last.x;
@@ -333,6 +360,9 @@ export class Creature {
   feed() {
     this.energy = Math.min(1.0, this.energy + 0.08);
     this.metabolicFlash = 1.0;
+    if (this.growthProgress < 1.0) {
+      this.nutrientBonus += Config.SANCTUARIES?.GROWTH_BONUS_SPORE || 0.08;
+    }
     if (this.radius < Config.CREATURE.MAX_RADIUS) {
       this.radius = Math.min(Config.CREATURE.MAX_RADIUS, this.radius + 0.12);
       this.baseRadius = this.radius;
@@ -345,10 +375,54 @@ export class Creature {
   consumeNectar(amount = 0.45) {
     this.energy = Math.min(1.0, this.energy + amount);
     this.metabolicFlash = 1.0;
+    if (this.growthProgress < 1.0) {
+      this.nutrientBonus += 0.25;
+    }
     this.favoriteCoord = { x: this.position.x, y: this.position.y };
     if (this.radius < Config.CREATURE.MAX_RADIUS) {
       this.radius = Math.min(Config.CREATURE.MAX_RADIUS, this.radius + 0.4);
       this.baseRadius = this.radius;
+    }
+  }
+
+  /**
+   * Emit a gentle bioluminescent wave that travels through nearby creatures.
+   * Designed to be soothing, calm and hypnotic with quick exponential decay.
+   * @param {Creature[]} [allCreatures]
+   * @param {number} [intensity=1.0]
+   * @param {number} [generation=0]
+   */
+  emitLightWave(allCreatures = [], intensity = 1.0, generation = 0) {
+    if (this.glowIntensity < intensity) {
+      this.glowIntensity = intensity;
+    }
+    this.lightEchoCooldown = Config.BIOLUMINESCENCE?.COOLDOWN_MS || 4500;
+
+    const maxGen = Config.BIOLUMINESCENCE?.MAX_GENERATIONS || 2;
+    if (generation >= maxGen || !allCreatures || allCreatures.length === 0) return;
+
+    const nextIntensity = intensity * (Config.BIOLUMINESCENCE?.PROPAGATION_FACTOR || 0.44);
+    if (nextIntensity < (Config.BIOLUMINESCENCE?.MIN_INTENSITY_TRIGGER || 0.20)) return;
+
+    const radius = Config.BIOLUMINESCENCE?.WAVE_RADIUS || 120;
+    const px = this.position.x;
+    const py = this.position.y;
+
+    for (let i = 0; i < allCreatures.length; i++) {
+      const other = allCreatures[i];
+      if (!other.isAlive || other === this) continue;
+      if (other.lightEchoCooldown > 0) continue;
+
+      const d = Math.hypot(other.position.x - px, other.position.y - py);
+      if (d < radius && d > 4) {
+        // Organic biological delay: 120ms to 240ms proportional to distance
+        const delay = 120 + (d / radius) * 120;
+        setTimeout(() => {
+          if (other.isAlive && other.lightEchoCooldown <= 0) {
+            other.emitLightWave(allCreatures, nextIntensity, generation + 1);
+          }
+        }, delay);
+      }
     }
   }
 
@@ -373,8 +447,36 @@ export class Creature {
    * jellyfish bell pulsing, and articulated Verlet chain segments).
    * @param {number} dt
    * @param {number} time
+   * @param {Creature[]} [allCreatures]
    */
-  updateKinematics(dt, time) {
+  updateKinematics(dt, time, allCreatures = []) {
+    // 0. Advance age, ontogeny & zen bioluminescence
+    this.age += dt;
+    if (this.lightEchoCooldown > 0) this.lightEchoCooldown = Math.max(0, this.lightEchoCooldown - dt);
+    if (this.glowIntensity > 0) this.glowIntensity = Math.max(0, this.glowIntensity - dt * 0.00085);
+
+    if (this.growthProgress < 1.0) {
+      const dur = Config.ONTOGENY?.JUVENILE_DURATION_MS || 35_000;
+      this.growthProgress = Math.min(1.0, this.growthProgress + (dt / dur) + this.nutrientBonus);
+      this.nutrientBonus = 0;
+      this.lifeStage = this.growthProgress < 0.98 ? (Config.LIFE_STAGE?.JUVENILE || 'juvenile') : (Config.LIFE_STAGE?.ADULT || 'adult');
+    } else if (this.age >= (Config.ONTOGENY?.ANCESTRAL_AGE_MS || 120_000)) {
+      if (!this.isAncestral) {
+        this.isAncestral = true;
+        this.lifeStage = Config.LIFE_STAGE?.ANCESTRAL || 'ancestral';
+        if (!this.ancestralAnnounced) {
+          this.ancestralAnnounced = true;
+          this.emitLightWave(allCreatures, 0.9);
+          globalBus.emit(Events.CREATURE_LEGENDARY, { creature: this, traitName: 'Ancestralidade Cósmica' });
+        }
+      }
+    }
+
+    // Scale radius by juvenile growth
+    const minScale = Config.ONTOGENY?.JUVENILE_SCALE_MIN || 0.50;
+    const currentScale = this.isOffspring ? (minScale + (1 - minScale) * this.growthProgress) : 1.0;
+    this.radius = this.baseRadius * currentScale;
+
     // 1. Smooth orientation facing (mass-weighted turning inertia)
     const mass = Math.pow(Math.max(0.6, this.radius / 14), 1.4);
     const speed = this.velocity.magnitude;

@@ -73,6 +73,68 @@ export class World {
     /** Currently selected creature for inspection / empathy. @type {Creature|null} */
     this.inspectedCreature = null;
 
+    // ── Sanctuaries & Micro-Climates (Jardins de Pólipos) ─────────────────
+    this.reefs = [
+      {
+        id: 'reef_abyss_left',
+        zone: Config.ZONE.SHADOW,
+        u: 0.22,
+        v: 0.88,
+        baseX: width * 0.22,
+        baseY: height * 0.88,
+        polyps: [
+          { offsetX: -16, height: 44, phase: 0.2, bulbRadius: 6.5, color: new Color(265, 80, 75) },
+          { offsetX: -5,  height: 58, phase: 1.5, bulbRadius: 8.0, color: new Color(285, 85, 80) },
+          { offsetX: 8,   height: 48, phase: 3.1, bulbRadius: 7.0, color: new Color(250, 75, 70) },
+          { offsetX: 20,  height: 36, phase: 4.8, bulbRadius: 5.5, color: new Color(295, 90, 85) },
+        ],
+        sporeTimer: 1000,
+        pulsePhase: 0,
+      },
+      {
+        id: 'reef_solar_right',
+        zone: Config.ZONE.LIGHT,
+        u: 0.78,
+        v: 0.12,
+        baseX: width * 0.78,
+        baseY: height * 0.12,
+        polyps: [
+          { offsetX: -18, height: 38, phase: 0.5, bulbRadius: 6.0, color: new Color(48, 90, 80) },
+          { offsetX: -4,  height: 52, phase: 2.1, bulbRadius: 7.5, color: new Color(55, 95, 85) },
+          { offsetX: 12,  height: 42, phase: 3.7, bulbRadius: 6.5, color: new Color(42, 85, 75) },
+        ],
+        sporeTimer: 2500,
+        pulsePhase: 1.2,
+      },
+      {
+        id: 'reef_abyss_right',
+        zone: Config.ZONE.SHADOW,
+        u: 0.68,
+        v: 0.91,
+        baseX: width * 0.68,
+        baseY: height * 0.91,
+        polyps: [
+          { offsetX: -14, height: 46, phase: 1.0, bulbRadius: 6.5, color: new Color(210, 80, 75) },
+          { offsetX: 2,   height: 62, phase: 2.8, bulbRadius: 8.5, color: new Color(230, 85, 80) },
+          { offsetX: 18,  height: 40, phase: 4.2, bulbRadius: 5.5, color: new Color(195, 75, 70) },
+        ],
+        sporeTimer: 3200,
+        pulsePhase: 2.5,
+      },
+    ];
+
+    // ── Periodic Cosmic Tides (Marés Cósmicas) ────────────────────────────
+    this.tide = {
+      active: false,
+      factor: 0,
+      direction: 1,
+      vector: { x: 0, y: 0 },
+      startTime: 0,
+      duration: Config.TIDES?.DURATION_MS || 12_000,
+      nextTideTime: 45_000,
+      endTime: 0,
+    };
+
     this._subscribeToEvents();
   }
 
@@ -123,15 +185,25 @@ export class World {
     // 4.8. Autonomous Cognitive AI: update drives, sensory perception, and conscious decisions
     this._decision.update(this.creatures, this.threshold, touchPoints, this.activeNectar, dt, now);
 
-    // 5. Physics: steering, movement, sleep damping, dance, nectar pull, thermocline convection
-    this._physics.update(this.creatures, this.threshold, dt, this.wind, touchPoints, this.activeNectar, now);
+    // 4.9. Update environmental sanctuaries & periodic cosmic tides
+    this._updateTide(now, dt);
+    this._updateReefs(now, dt);
+
+    // 5. Physics: steering, movement, sleep damping, dance, nectar pull, thermocline convection, tide & reefs
+    this._physics.update(this.creatures, this.threshold, dt, this.wind, touchPoints, this.activeNectar, now, this.tide, this.reefs);
 
     // 5.5. Update active nectar consumption
     this._updateNectar(now, dt);
 
     // 6. Interactions: collisions, bonding, courtship dance, offspring
     const offspring = this._interaction.update(this.creatures, this.particles, this.audio, now);
-    for (const c of offspring) this._addCreature(c);
+    for (const c of offspring) {
+      c.isOffspring = true;
+      c.growthProgress = 0.0;
+      c.lifeStage = Config.LIFE_STAGE?.JUVENILE || 'juvenile';
+      this._addCreature(c);
+      c.emitLightWave(this.creatures, 1.0);
+    }
 
     // 7. Particles & flora spores
     this.particles.update(dt);
@@ -156,6 +228,15 @@ export class World {
     this.threshold.onResize(height);
     this._physics.onResize(width, height);
     this._spawn.onResize(width, height);
+    this._layoutReefs(width, height);
+  }
+
+  _layoutReefs(width, height) {
+    if (!this.reefs) return;
+    for (const reef of this.reefs) {
+      reef.baseX = reef.u * width;
+      reef.baseY = reef.v * height;
+    }
   }
 
   // ── Player interactions ───────────────────────────────────────────────────
@@ -204,6 +285,8 @@ export class World {
     };
     this.audio.playNectarChime(x / this._width, y / this._height);
     this.particles.emitNectarFeedBurst(x, y);
+    const close = this._closestCreatureTo(x, y, 160);
+    if (close) close.emitLightWave?.(this.creatures, 0.85);
     globalBus.emit(Events.NECTAR_SPAWNED, this.activeNectar);
   }
 
@@ -429,6 +512,7 @@ export class World {
       const dist = Math.hypot(dx, dy);
       if (dist < c.radius + 18) {
         c.consumeNectar(0.45);
+        c.emitLightWave?.(this.creatures, 0.90);
         this.activeNectar.charges--;
         this.particles.emitNectarFeedBurst(this.activeNectar.x, this.activeNectar.y);
         this.audio.playNectarChime(this.activeNectar.x / this._width, this.activeNectar.y / this._height);
@@ -471,6 +555,96 @@ export class World {
       const rx = reed.u * this._width;
       const ry = this.threshold.y;
       this.particles.emitFloraSpore(rx, ry, reed.side);
+    }
+  }
+
+  _updateTide(now, dt) {
+    if (!this.tide) return;
+
+    if (!this.tide.active) {
+      if (now >= this.tide.nextTideTime) {
+        this.tide.active = true;
+        this.tide.startTime = now;
+        this.tide.duration = Config.TIDES?.DURATION_MS || 12_000;
+        this.tide.endTime = now + this.tide.duration;
+        this.tide.direction = Math.random() < 0.5 ? 1 : -1;
+        this.tide.nextTideTime = now + (Config.TIDES?.INTERVAL_MS || 50_000) + Math.random() * 15_000;
+        this.diary.add('🌊 Uma maré cósmica transversal percorre o éter, alinhando os seres.');
+        globalBus.emit(Events.COSMIC_TIDE_START, this.tide);
+        this.audio?.playFloraRustle?.(0.5, 0.5);
+      }
+    }
+
+    if (this.tide.active) {
+      const elapsed = now - this.tide.startTime;
+      if (now >= this.tide.endTime) {
+        this.tide.active = false;
+        this.tide.factor = 0;
+        this.tide.vector.x = 0;
+        this.tide.vector.y = 0;
+        globalBus.emit(Events.COSMIC_TIDE_END);
+      } else {
+        const progress = Math.max(0, Math.min(1, elapsed / this.tide.duration));
+        // Smooth sine bell envelope [0 -> 1 -> 0]
+        this.tide.factor = Math.sin(progress * Math.PI);
+        const baseForce = Config.TIDES?.FORCE || 0.42;
+        this.tide.vector.x = this.tide.direction * baseForce * this.tide.factor;
+        this.tide.vector.y = Math.sin(now * 0.0012) * 0.08 * this.tide.factor;
+      }
+    }
+  }
+
+  _updateReefs(now, dt) {
+    if (!this.reefs || this.reefs.length === 0) return;
+    const sporeInterval = Config.SANCTUARIES?.SPORE_INTERVAL_MS || 3800;
+    const regenAmount = Config.SANCTUARIES?.REST_ENERGY_REGEN || 0.00018;
+
+    for (const reef of this.reefs) {
+      reef.pulsePhase += dt * 0.002;
+      reef.sporeTimer = (reef.sporeTimer || 0) + dt;
+
+      // Periodically emit a peaceful micro-spore from a polyp
+      if (reef.sporeTimer >= sporeInterval) {
+        reef.sporeTimer = 0;
+        if (this.activeSpores.length < 32 && reef.polyps.length > 0) {
+          const polyp = reef.polyps[Math.floor(Math.random() * reef.polyps.length)];
+          const sx = reef.baseX + polyp.offsetX;
+          const sy = reef.zone === Config.ZONE.LIGHT
+            ? reef.baseY + polyp.height
+            : reef.baseY - polyp.height;
+
+          this.activeSpores.push({
+            x: sx,
+            y: sy,
+            vx: (Math.random() - 0.5) * 0.35 + (this.wind.x * 0.3),
+            vy: (reef.zone === Config.ZONE.LIGHT ? 0.30 : -0.30) + (Math.random() - 0.5) * 0.2,
+            life: 1.0,
+            maxLife: 14_000,
+            radius: polyp.bulbRadius * 0.55,
+            color: polyp.color.clone(),
+            nutrition: Config.INTERACTION_EXPANDED?.SPORE_NUTRITION || 0.24,
+          });
+        }
+      }
+
+      // Rest & Sanctuary regeneration for nearby creatures
+      for (const c of this.creatures) {
+        if (!c.isAlive) continue;
+        const d = Math.hypot(c.position.x - reef.baseX, c.position.y - reef.baseY);
+        if (d < (Config.SANCTUARIES?.REST_ATTRACT_RADIUS || 140)) {
+          c.experiencePeace(0.02);
+          if (c.energy < 0.95) c.energy = Math.min(1.0, c.energy + regenAmount * dt);
+          if (c.fatigue > 0.05) c.fatigue = Math.max(0.0, c.fatigue - regenAmount * dt);
+
+          if (c.growthProgress < 1.0) {
+            c.nutrientBonus += 0.00025 * dt; // nursery accelerated growth
+          }
+
+          if (Math.random() < 0.0005 && !c.isSleeping) {
+            c.expressThought(`${c.name} repousa no santuário dos pólipos cósmicos.`);
+          }
+        }
+      }
     }
   }
 

@@ -149,6 +149,8 @@ export class Game {
         inspectedCreature: this._world.inspectedCreature,
         diurnalFactor:     this._world.diurnalFactor,
         diurnalCycle:      this._world.diurnalCycle,
+        reefs:             this._world.reefs,
+        tide:              this._world.tide,
         now:               timestamp,
         dt,
       });

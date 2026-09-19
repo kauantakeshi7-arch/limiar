@@ -50,8 +50,10 @@ export class PhysicsSystem {
    * @param {Array<{x: number, y: number}>} [touchPoints] - Active player touch points / ripples.
    * @param {{x: number, y: number, life: number}|null} [activeNectar] - Active celestial nectar droplet.
    * @param {number} [now] - Current simulation timestamp.
+   * @param {object|null} [tide] - Periodic cosmic tide state.
+   * @param {Array<object>} [reefs] - Sanctuary reefs in the world.
    */
-  update(creatures, threshold, dt, wind, touchPoints = [], activeNectar = null, now = 0) {
+  update(creatures, threshold, dt, wind, touchPoints = [], activeNectar = null, now = 0, tide = null, reefs = []) {
     const dtC  = Math.min(dt, 50);
     const time = now || performance.now();
     const alive = creatures.filter(c => c.isAlive);
@@ -61,7 +63,7 @@ export class PhysicsSystem {
       if (creature.state === CreatureState.WITNESS) continue;
       if (creature.isDancing) continue;
 
-      const steering = this._computeSteering(creature, alive, threshold, wind, touchPoints, activeNectar, time);
+      const steering = this._computeSteering(creature, alive, threshold, wind, touchPoints, activeNectar, time, tide, reefs);
       this._integrate(creature, steering, dtC);
     }
 
@@ -71,13 +73,13 @@ export class PhysicsSystem {
     // Final boundary clamp and kinematics update guarantee for all alive entities
     for (const creature of alive) {
       this._clampToBounds(creature);
-      creature.updateKinematics(dtC, time);
+      creature.updateKinematics(dtC, time, alive);
     }
   }
 
   // ── Steering composition ──────────────────────────────────────────────────
 
-  _computeSteering(creature, allCreatures, threshold, wind, touchPoints = [], activeNectar = null, now = 0) {
+  _computeSteering(creature, allCreatures, threshold, wind, touchPoints = [], activeNectar = null, now = 0, tide = null, reefs = []) {
     const wander   = this._wander(creature);
     const flock    = this._flocking(creature, allCreatures);
     const zoneAttr = this._zoneAttraction(creature, threshold);
@@ -178,6 +180,40 @@ export class PhysicsSystem {
       }
     }
 
+    // Periodic Cosmic Tide force (gentle laminar environmental drift)
+    let tideX = 0, tideY = 0;
+    if (tide && tide.active && tide.factor > 0) {
+      tideX = (tide.vector?.x || 0);
+      tideY = (tide.vector?.y || 0);
+    }
+
+    // Sanctuary Reef Rest Attraction (for tired, hungry, resting, or juvenile creatures)
+    let reefX = 0, reefY = 0;
+    if (reefs && reefs.length > 0 && (creature.fatigue > 0.35 || creature.energy < 0.65 || creature.growthProgress < 1.0 || creature.decision === 'rest')) {
+      const attractDist = Config.SANCTUARIES?.REST_ATTRACT_RADIUS || 140;
+      let closestReef = null;
+      let closestDistSq = Infinity;
+      for (let r = 0; r < reefs.length; r++) {
+        const reef = reefs[r];
+        if (reef.zone === creature.zone || creature.state === CreatureState.TRANSCENDENT) {
+          const rdx = reef.baseX - px;
+          const rdy = reef.baseY - py;
+          const dsq = rdx * rdx + rdy * rdy;
+          if (dsq < closestDistSq) {
+            closestDistSq = dsq;
+            closestReef = reef;
+          }
+        }
+      }
+      if (closestReef && closestDistSq < attractDist * attractDist && closestDistSq > 16) {
+        const dist = Math.sqrt(closestDistSq);
+        const factor = (1 - dist / attractDist) * 0.45;
+        const invD = 1 / dist;
+        reefX = (closestReef.baseX - px) * invD * factor;
+        reefY = (closestReef.baseY - py) * invD * factor;
+      }
+    }
+
     // Combine all steering forces into scalar accumulators (only 1 Vector2 allocated)
     const steerX = wander.x * BOIDS.WANDER
                  + flock.sepX * BOIDS.SEPARATION
@@ -190,7 +226,9 @@ export class PhysicsSystem {
                  + touchX
                  + thermoX
                  + nectarX
-                 + decisionX;
+                 + decisionX
+                 + tideX
+                 + reefX;
 
     const steerY = wander.y * BOIDS.WANDER
                  + flock.sepY * BOIDS.SEPARATION
@@ -203,7 +241,9 @@ export class PhysicsSystem {
                  + touchY
                  + thermoY
                  + nectarY
-                 + decisionY;
+                 + decisionY
+                 + tideY
+                 + reefY;
 
     return new Vector2(steerX, steerY);
   }
