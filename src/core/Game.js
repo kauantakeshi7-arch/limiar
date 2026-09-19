@@ -212,6 +212,9 @@ export class Game {
       this._audioReady = true;
     }
 
+    // Auto-collapse HUD menu when user touches canvas
+    this._collapseHud();
+
     const { x, y } = this._canvasPos(event);
     this._activePointers.set(event.pointerId, { x, y });
 
@@ -337,12 +340,31 @@ export class Game {
   // ── UI ────────────────────────────────────────────────────────────────────
 
   _bindUI() {
+    // Collapsible celestial HUD toggle for mobile
+    const hud = document.getElementById('hud');
+    const btnHudToggle = document.getElementById('btn-hud-toggle');
+    btnHudToggle?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isExpanded = hud?.classList.toggle('expanded');
+      btnHudToggle.setAttribute('aria-expanded', String(!!isExpanded));
+      this._vibrate(Config.HAPTICS?.TAP_LIGHT_MS || 8);
+    });
+
+    // Close HUD menu when tapping outside
+    window.addEventListener('pointerdown', (e) => {
+      if (hud && !hud.contains(e.target)) {
+        this._collapseHud();
+      }
+    }, { passive: true });
+
     document.getElementById('btn-diary')?.addEventListener('click', () => {
       this._inspectCard?.close();
+      this._collapseHud();
       this._toggleOverlay('diary');
     });
     document.getElementById('btn-bestiary')?.addEventListener('click', () => {
       this._inspectCard?.close();
+      this._collapseHud();
       this._toggleOverlay('bestiary');
     });
     document.getElementById('diary-close')?.addEventListener('click', () => this._closeOverlay('diary'));
@@ -371,6 +393,7 @@ export class Game {
     const btnPhoto = document.getElementById('btn-photo');
     btnPhoto?.addEventListener('click', (e) => {
       e.stopPropagation();
+      this._collapseHud();
       this._triggerWallpaperCapture();
     });
 
@@ -380,6 +403,14 @@ export class Game {
         if (e.target.id === id) this._closeOverlay(id);
       });
     });
+  }
+
+  _collapseHud() {
+    const hud = document.getElementById('hud');
+    if (hud?.classList.contains('expanded')) {
+      hud.classList.remove('expanded');
+      document.getElementById('btn-hud-toggle')?.setAttribute('aria-expanded', 'false');
+    }
   }
 
   _toggleOverlay(id) {
