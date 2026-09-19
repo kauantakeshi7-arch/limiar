@@ -135,6 +135,9 @@ export class Renderer {
     diurnalCycle = 0,
     reefs = [],
     tide = null,
+    vents = [],
+    aurora = null,
+    season = null,
     now,
     dt = 16
   }) {
@@ -184,14 +187,17 @@ export class Renderer {
 
       ctx.clearRect(0, 0, w, h);
 
-      // 1. Background (breathes + diurnal tide + micro-weather)
-      this._drawBackground(ctx, w, h, ty, ea, breath, sunburst, voidPulse, diurnalCycle, diurnalFactor);
+      // 1. Background (breathes + diurnal tide + micro-weather + cosmic seasons)
+      this._drawBackground(ctx, w, h, ty, ea, breath, sunburst, voidPulse, diurnalCycle, diurnalFactor, season);
 
       // 2. Stars (twinkle + nadir shooting stars)
       this._drawStars(ctx, w, h, ty, ea, voidPulse, diurnalCycle, diurnalFactor);
 
       // 3. Light rays (light zone + sunburst flares + zenith warmth)
       this._drawLightAtmosphere(ctx, w, ty, now, ea, breath, sunburst, diurnalFactor, diurnalCycle);
+
+      // 3.2. Aurora Nursery Curtains (Estrato Celeste Supremo)
+      this._drawAuroraCurtains(ctx, w, h, now, wind, season);
 
       // 3.5. Cosmic Tide Streamlines (Zen horizontal ether current)
       if (tide && tide.factor > 0.005) {
@@ -205,6 +211,11 @@ export class Renderer {
       // 5.5. Ecological Sanctuaries & Polyp Reefs
       if (reefs && reefs.length > 0) {
         this._drawSanctuaries(ctx, reefs, now, w, h, wind, tide);
+      }
+
+      // 5.8. Hydrothermal Vents & Abyssal Bubble Rings (Fossa das Fumarolas)
+      if (vents && vents.length > 0) {
+        this._drawHydrothermalVents(ctx, vents, now, w, h);
       }
 
       // 6. Threshold (tension waves + harp impulses + living flora reeds + diurnal tint)
@@ -226,8 +237,11 @@ export class Renderer {
       // 11. External particles
       this._drawParticles(ctx, particles);
 
-      // 11.5. Floating flora spores & Player Calls
+      // 11.5. Floating flora spores, Silver Stardust & Player Calls
       this._drawSpores(ctx, activeSpores, now);
+      if (aurora?.shimmerDust) {
+        this._drawShimmerDust(ctx, aurora.shimmerDust, now);
+      }
       this._drawPlayerCalls(ctx, playerCalls, now);
 
       // 12. Celestial nectar droplet
@@ -248,7 +262,7 @@ export class Renderer {
       this._drawEclipseOverlay(ctx, w, h, ty, ea, now);
 
       // 16. Post-process
-      this._drawBloomPass(ctx, w, h, creatures, ty, ea, now, sunburst, voidPulse, diurnalCycle);
+      this._drawBloomPass(ctx, w, h, creatures, ty, ea, now, sunburst, voidPulse, diurnalCycle, season);
       this._drawVignette(ctx, w, h, diurnalFactor);
     } catch (err) {
       console.error('[Limiar Renderer] Frame render error:', err);
@@ -257,7 +271,7 @@ export class Renderer {
 
   // ── 1. Background ─────────────────────────────────────────────────────────
 
-  _drawBackground(ctx, w, h, ty, ea, breath = 0.5, sunburst = 0, voidPulse = 0, diurnalCycle = 0, diurnalFactor = 0.5) {
+  _drawBackground(ctx, w, h, ty, ea, breath = 0.5, sunburst = 0, voidPulse = 0, diurnalCycle = 0, diurnalFactor = 0.5, season = null) {
     const eclipse = 1 - ea;
     const diurnal = this._getDiurnalSample(diurnalCycle);
 
@@ -265,10 +279,61 @@ export class Renderer {
     const lightStop = 0.55 + breath * 0.08;
     const lg = ctx.createLinearGradient(0, 0, 0, ty);
 
-    // Sunburst golden infusion (smoothly blended without hard threshold)
+    // Base colors from diurnal rhythm
     let lTop = diurnal.lightTop;
     let lMid = diurnal.lightMid;
     let lBot = diurnal.lightBot;
+    let sTop = diurnal.shadowTop;
+    let sMid = diurnal.shadowMid;
+    let sBot = diurnal.shadowBot;
+
+    // Seasonal macro-climate color infusion (smooth C1 blending)
+    if (season) {
+      const getSeasonColors = (type) => {
+        switch (type) {
+          case 'boreal_night':
+            return {
+              lt: '#e6fffa', lm: '#bbf7d0', lb: '#99f6e4',
+              st: '#042f2e', sm: '#022c22', sb: '#011c16'
+            };
+          case 'golden_eclipse':
+            return {
+              lt: '#fffbeb', lm: '#fef3c7', lb: '#fde68a',
+              st: '#291104', sm: '#1c0b02', sb: '#0d0401'
+            };
+          case 'crystal_tide':
+          default:
+            return {
+              lt: '#f0fdfa', lm: '#e0f2fe', lb: '#bae6fd',
+              st: '#0c1222', sm: '#080d19', sb: '#030712'
+            };
+        }
+      };
+
+      const c1 = getSeasonColors(season.current);
+      let sLightTop = c1.lt, sLightMid = c1.lm, sLightBot = c1.lb;
+      let sShadowTop = c1.st, sShadowMid = c1.sm, sShadowBot = c1.sb;
+
+      if (season.blend > 0 && season.next) {
+        const c2 = getSeasonColors(season.next);
+        sLightTop = this._blendHex(sLightTop, c2.lt, season.blend);
+        sLightMid = this._blendHex(sLightMid, c2.lm, season.blend);
+        sLightBot = this._blendHex(sLightBot, c2.lb, season.blend);
+        sShadowTop = this._blendHex(sShadowTop, c2.st, season.blend);
+        sShadowMid = this._blendHex(sShadowMid, c2.sm, season.blend);
+        sShadowBot = this._blendHex(sShadowBot, c2.sb, season.blend);
+      }
+
+      // Infuse seasonal colors into diurnal palette smoothly
+      lTop = this._blendHex(lTop, sLightTop, 0.28);
+      lMid = this._blendHex(lMid, sLightMid, 0.30);
+      lBot = this._blendHex(lBot, sLightBot, 0.28);
+      sTop = this._blendHex(sTop, sShadowTop, 0.34);
+      sMid = this._blendHex(sMid, sShadowMid, 0.36);
+      sBot = this._blendHex(sBot, sShadowBot, 0.38);
+    }
+
+    // Sunburst golden infusion (smoothly blended without hard threshold)
     if (sunburst > 0) {
       lTop = this._blendHex(lTop, '#fff5d6', sunburst * 0.65);
       lMid = this._blendHex(lMid, '#fde293', sunburst * 0.75);
@@ -285,9 +350,6 @@ export class Renderer {
     const shadowStop = 0.5 - breath * 0.06;
     const sg = ctx.createLinearGradient(0, ty, 0, h);
 
-    let sTop = diurnal.shadowTop;
-    let sMid = diurnal.shadowMid;
-    let sBot = diurnal.shadowBot;
     if (voidPulse > 0) {
       sTop = this._blendHex(sTop, '#2d055a', voidPulse * 0.7);
       sMid = this._blendHex(sMid, '#1a0236', voidPulse * 0.75);
@@ -668,6 +730,160 @@ export class Renderer {
         ctx.fill();
         ctx.shadowBlur = 0;
       }
+    }
+    ctx.restore();
+  }
+
+  // ── 3.2. Aurora Nursery Curtains (Estrato Celeste Supremo) ─────────────────
+
+  _drawAuroraCurtains(ctx, w, h, now, wind = { x: 0, y: 0 }, season = null) {
+    const auroraH = h * (Config.AURORA_NURSERY?.HEIGHT_RATIO || 0.20);
+    if (auroraH <= 5 || w <= 0) return;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+
+    // Base aurora presence, heightened during Boreal Night
+    let auroraAlpha = 0.35;
+    if (season?.current === 'boreal_night') {
+      auroraAlpha = 0.65;
+    } else if (season?.next === 'boreal_night' && season?.blend > 0) {
+      auroraAlpha = 0.35 + season.blend * 0.30;
+    }
+
+    const layers = [
+      // 1. Mint emerald
+      { color1: 'rgba(16, 185, 129, 0.45)', color2: 'rgba(52, 211, 153, 0)', speed: 0.0006, freq: 0.0045, amp: auroraH * 0.4, phase: 0.0 },
+      // 2. Turquoise
+      { color1: 'rgba(45, 212, 191, 0.40)', color2: 'rgba(20, 184, 166, 0)', speed: 0.0008, freq: 0.0060, amp: auroraH * 0.35, phase: 1.8 },
+      // 3. Electric cyan
+      { color1: 'rgba(56, 189, 248, 0.35)', color2: 'rgba(14, 165, 233, 0)', speed: 0.0005, freq: 0.0035, amp: auroraH * 0.45, phase: 3.5 },
+    ];
+
+    const windShift = (wind?.x || 0) * 15;
+
+    for (let l = 0; l < layers.length; l++) {
+      const layer = layers[l];
+      const grad = ctx.createLinearGradient(0, 0, 0, auroraH * 1.35);
+      grad.addColorStop(0, layer.color1.replace(/[\d.]+\)$/, `${(auroraAlpha * 0.65).toFixed(3)})`));
+      grad.addColorStop(0.55, layer.color1.replace(/[\d.]+\)$/, `${(auroraAlpha * 0.35).toFixed(3)})`));
+      grad.addColorStop(1, layer.color2);
+
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+
+      const step = Math.max(16, Math.floor(w / 36));
+      for (let x = 0; x <= w + step; x += step) {
+        const wave = Math.sin(now * layer.speed + x * layer.freq + layer.phase) * layer.amp
+                   + Math.cos(now * layer.speed * 0.7 + x * layer.freq * 1.5) * (layer.amp * 0.35);
+        const y = Math.max(10, (auroraH * 0.75) + wave + windShift);
+        ctx.lineTo(x, y);
+      }
+
+      ctx.lineTo(w, 0);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  // ── 5.8. Hydrothermal Vents & Bubble Rings (Fossa das Fumarolas) ───────────
+
+  _drawHydrothermalVents(ctx, vents, now, w, h) {
+    if (!vents || vents.length === 0) return;
+
+    ctx.save();
+    for (let i = 0; i < vents.length; i++) {
+      const vent = vents[i];
+      const vx = vent.baseX;
+      const vy = vent.baseY;
+      const pulse = 0.5 + 0.5 * Math.sin(now * 0.0022 + vent.pulsePhase);
+
+      // 1. Rising Convective Thermal Plume (Magenta & Carmine gradient)
+      const plumeH = 170;
+      const plumeW = 55 + pulse * 14;
+      const plumeGrad = ctx.createRadialGradient(vx, vy - 10, 8, vx, vy - plumeH * 0.5, plumeW * 1.4);
+      plumeGrad.addColorStop(0, `rgba(244, 63, 94, ${0.28 + pulse * 0.12})`);
+      plumeGrad.addColorStop(0.45, `rgba(225, 29, 72, ${0.12 + pulse * 0.06})`);
+      plumeGrad.addColorStop(1, 'rgba(190, 24, 93, 0)');
+
+      ctx.beginPath();
+      ctx.moveTo(vx - 14, vy);
+      ctx.quadraticCurveTo(vx - plumeW, vy - plumeH * 0.5, vx, vy - plumeH);
+      ctx.quadraticCurveTo(vx + plumeW, vy - plumeH * 0.5, vx + 14, vy);
+      ctx.closePath();
+      ctx.fillStyle = plumeGrad;
+      ctx.fill();
+
+      // 2. Basalt Chimney Base (dark volcanic obsidian rock mound)
+      ctx.beginPath();
+      ctx.moveTo(vx - 22, vy + 12);
+      ctx.lineTo(vx - 15, vy - 14);
+      ctx.lineTo(vx + 15, vy - 14);
+      ctx.lineTo(vx + 22, vy + 12);
+      ctx.closePath();
+      ctx.fillStyle = '#090214';
+      ctx.strokeStyle = '#1e0836';
+      ctx.lineWidth = 1.8;
+      ctx.fill();
+      ctx.stroke();
+
+      // Glowing volcanic throat fissure
+      ctx.beginPath();
+      ctx.ellipse(vx, vy - 14, 11, 4, 0, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(244, 63, 94, ${0.85 + pulse * 0.15})`;
+      ctx.shadowColor = '#f43f5e';
+      ctx.shadowBlur = 12 + pulse * 6;
+      ctx.fill();
+
+      // 3. Concentric Expanding Bubble Rings
+      for (let b = 0; b < vent.bubbles.length; b++) {
+        const bubble = vent.bubbles[b];
+        const bAlpha = Math.max(0, Math.min(1, bubble.life * bubble.alpha));
+        if (bAlpha < 0.01) continue;
+
+        ctx.beginPath();
+        ctx.arc(bubble.x, bubble.y, Math.max(1, bubble.radius), 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(251, 113, 133, ${bAlpha * 0.8})`;
+        ctx.lineWidth = 1.4;
+        ctx.shadowColor = 'rgba(244, 63, 94, 0.9)';
+        ctx.shadowBlur = 8;
+        ctx.stroke();
+
+        // Inner glowing core
+        if (bubble.radius > 5) {
+          ctx.beginPath();
+          ctx.arc(bubble.x, bubble.y, Math.max(1, bubble.radius * 0.4), 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 228, 230, ${bAlpha * 0.5})`;
+          ctx.fill();
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  // ── 11.6. Silver Stardust Trails ───────────────────────────────────────────
+
+  _drawShimmerDust(ctx, dustList, now) {
+    if (!dustList || dustList.length === 0) return;
+
+    ctx.save();
+    for (let i = 0; i < dustList.length; i++) {
+      const d = dustList[i];
+      const alpha = Math.max(0, Math.min(1, d.alpha * d.life));
+      if (alpha < 0.01) continue;
+
+      const sparkle = 0.7 + 0.3 * Math.sin(now * 0.01 + i);
+      const r = Math.max(0.5, d.size * sparkle);
+
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(241, 245, 249, ${alpha})`;
+      ctx.shadowColor = 'rgba(226, 232, 240, 0.9)';
+      ctx.shadowBlur = 6;
+      ctx.fill();
     }
     ctx.restore();
   }
@@ -2077,7 +2293,7 @@ export class Renderer {
 
   // ── 14. Post-process ──────────────────────────────────────────────────────
 
-  _drawBloomPass(ctx, w, h, creatures, ty, ea, now, sunburst = 0, voidPulse = 0, diurnalCycle = 0) {
+  _drawBloomPass(ctx, w, h, creatures, ty, ea, now, sunburst = 0, voidPulse = 0, diurnalCycle = 0, season = null) {
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
     ctx.globalAlpha = 0.20 + sunburst * 0.12 + voidPulse * 0.08;
@@ -2097,10 +2313,19 @@ export class Renderer {
       ctx.fill();
     }
 
-    // Bloom threshold glow harmonized with diurnal cycle
+    // Bloom threshold glow harmonized with diurnal cycle and cosmic seasons
     if (ea > 0.3) {
       const diurnal = this._getDiurnalSample(diurnalCycle);
-      const [btR, btG, btB] = diurnal.bloomTint;
+      let [btR, btG, btB] = diurnal.bloomTint;
+
+      if (season?.current === 'boreal_night') {
+        [btR, btG, btB] = this._blendRGBArray([btR, btG, btB], [52, 211, 153], 0.65);
+      } else if (season?.current === 'golden_eclipse') {
+        [btR, btG, btB] = this._blendRGBArray([btR, btG, btB], [251, 191, 36], 0.60);
+      } else if (season?.current === 'crystal_tide') {
+        [btR, btG, btB] = this._blendRGBArray([btR, btG, btB], [224, 242, 254], 0.45);
+      }
+
       const pulse = 0.5 + 0.5 * Math.sin(now * 0.0013);
       const bg    = ctx.createLinearGradient(0, ty - 28, 0, ty + 28);
       bg.addColorStop(0,   `rgba(${btR}, ${btG}, ${btB}, 0)`);

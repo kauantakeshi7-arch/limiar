@@ -135,6 +135,67 @@ export class World {
       endTime: 0,
     };
 
+    // ── Cosmic Seasons (Biomas Temporais) ─────────────────────────────────
+    this.season = {
+      index: 0,
+      current: Config.SEASONS?.TYPES?.CRYSTAL_TIDE || 'crystal_tide',
+      next: Config.SEASONS?.TYPES?.BOREAL_NIGHT || 'boreal_night',
+      blend: 0,
+      progress: 0,
+      name: Config.SEASONS?.NAMES?.crystal_tide || 'Maré de Cristal',
+      lastAnnounced: Config.SEASONS?.TYPES?.CRYSTAL_TIDE || 'crystal_tide',
+      lastBorealWave: 0,
+    };
+
+    // ── Hydrothermal Fissures & Abyssal Vents (Fossa das Fumarolas) ───────
+    this.vents = [
+      {
+        id: 'vent_abyss_1',
+        u: 0.22,
+        v: 0.96,
+        baseX: width * 0.22,
+        baseY: height * 0.96,
+        width: 38,
+        height: 22,
+        pulsePhase: 0.0,
+        bubbleTimer: 800,
+        bubbles: [],
+        lastSingingBowlTime: 0,
+      },
+      {
+        id: 'vent_abyss_2',
+        u: 0.50,
+        v: 0.97,
+        baseX: width * 0.50,
+        baseY: height * 0.97,
+        width: 44,
+        height: 25,
+        pulsePhase: 1.8,
+        bubbleTimer: 2400,
+        bubbles: [],
+        lastSingingBowlTime: 0,
+      },
+      {
+        id: 'vent_abyss_3',
+        u: 0.78,
+        v: 0.96,
+        baseX: width * 0.78,
+        baseY: height * 0.96,
+        width: 36,
+        height: 20,
+        pulsePhase: 3.5,
+        bubbleTimer: 1600,
+        bubbles: [],
+        lastSingingBowlTime: 0,
+      },
+    ];
+
+    // ── Aurora Nursery (Estrato Celeste Supremo) ──────────────────────────
+    this.aurora = {
+      lastChimeTime: 0,
+      shimmerDust: [],
+    };
+
     this._subscribeToEvents();
   }
 
@@ -163,8 +224,9 @@ export class World {
     this.diurnalCycle = (now % diurnalPeriod) / diurnalPeriod;
     this.diurnalFactor = 0.5 + 0.5 * Math.sin(this.diurnalCycle * Math.PI * 2);
 
-    // 0. Update wind simulation
+    // 0. Update wind simulation & seasonal macro-climate
     this._updateWind(dt);
+    this._updateSeasons(now, dt);
 
     // 1. Spawn new creatures if needed
     const newCreatures = this._spawn.update(this.creatures, this.threshold, now);
@@ -185,12 +247,14 @@ export class World {
     // 4.8. Autonomous Cognitive AI: update drives, sensory perception, and conscious decisions
     this._decision.update(this.creatures, this.threshold, touchPoints, this.activeNectar, dt, now);
 
-    // 4.9. Update environmental sanctuaries & periodic cosmic tides
+    // 4.9. Update environmental sanctuaries, periodic cosmic tides, vents & aurora nursery
     this._updateTide(now, dt);
     this._updateReefs(now, dt);
+    this._updateVents(now, dt);
+    this._updateAuroraNursery(now, dt);
 
-    // 5. Physics: steering, movement, sleep damping, dance, nectar pull, thermocline convection, tide & reefs
-    this._physics.update(this.creatures, this.threshold, dt, this.wind, touchPoints, this.activeNectar, now, this.tide, this.reefs);
+    // 5. Physics: steering, movement, sleep damping, dance, nectar pull, thermocline convection, tide, reefs, vents & aurora
+    this._physics.update(this.creatures, this.threshold, dt, this.wind, touchPoints, this.activeNectar, now, this.tide, this.reefs, this.vents, this.season);
 
     // 5.5. Update active nectar consumption
     this._updateNectar(now, dt);
@@ -212,8 +276,8 @@ export class World {
     this._updateSpores(now, dt);
     this._updatePlayerCalls(now, dt);
 
-    // 8. Sync audio to creature positions & adaptive atmosphere
-    this.audio.update(now, this.diurnalFactor, this.creatures);
+    // 8. Sync audio to creature positions, seasons & adaptive atmosphere
+    this.audio.update(now, this.diurnalFactor, this.creatures, this.season);
     for (const c of this.creatures) {
       if (c.isAlive) this.audio.updateCreaturePosition(c, this._width, this._height, this.threshold.y);
     }
@@ -229,6 +293,7 @@ export class World {
     this._physics.onResize(width, height);
     this._spawn.onResize(width, height);
     this._layoutReefs(width, height);
+    this._layoutVents(width, height);
   }
 
   _layoutReefs(width, height) {
@@ -236,6 +301,14 @@ export class World {
     for (const reef of this.reefs) {
       reef.baseX = reef.u * width;
       reef.baseY = reef.v * height;
+    }
+  }
+
+  _layoutVents(width, height) {
+    if (!this.vents) return;
+    for (const vent of this.vents) {
+      vent.baseX = vent.u * width;
+      vent.baseY = vent.v * height;
     }
   }
 
@@ -646,6 +719,178 @@ export class World {
           }
         }
       }
+    }
+  }
+
+  _updateSeasons(now, dt) {
+    const seasonList = [
+      Config.SEASONS?.TYPES?.CRYSTAL_TIDE || 'crystal_tide',
+      Config.SEASONS?.TYPES?.BOREAL_NIGHT || 'boreal_night',
+      Config.SEASONS?.TYPES?.GOLDEN_ECLIPSE || 'golden_eclipse',
+    ];
+    const dur = Config.SEASONS?.SEASON_DURATION_MS || 240_000;
+    const transDur = Config.SEASONS?.TRANSITION_DURATION_MS || 32_000;
+    const totalCycle = dur * seasonList.length;
+
+    const cyclePos = (now % totalCycle) / dur;
+    const currentIndex = Math.floor(cyclePos) % seasonList.length;
+    const nextIndex = (currentIndex + 1) % seasonList.length;
+    const progress = cyclePos - Math.floor(cyclePos);
+
+    const timeRemaining = (1 - progress) * dur;
+    let blend = 0;
+    if (timeRemaining < transDur) {
+      const tLinear = 1 - (timeRemaining / transDur);
+      blend = 0.5 - 0.5 * Math.cos(tLinear * Math.PI);
+    }
+
+    this.season.index = currentIndex;
+    this.season.current = seasonList[currentIndex];
+    this.season.next = seasonList[nextIndex];
+    this.season.blend = blend;
+    this.season.progress = progress;
+    this.season.name = Config.SEASONS?.NAMES?.[this.season.current] || 'Maré Cósmica';
+
+    // Diary announcement on season transition
+    if (this.season.current !== this.season.lastAnnounced) {
+      this.season.lastAnnounced = this.season.current;
+      switch (this.season.current) {
+        case 'crystal_tide':
+          this.diary.add('💎 O cosmos adormece sob a Maré de Cristal — o éter torna-se translúcido e sereno.');
+          break;
+        case 'boreal_night':
+          this.diary.add('🌌 A Noite Boreal ergue-se no horizonte, despertando ondas de luz harmônica.');
+          break;
+        case 'golden_eclipse':
+          this.diary.add('☀️ O calor do Eclipse Dourado abraça o oceano cósmico com serenidade eterna.');
+          break;
+      }
+    }
+
+    // Boreal Night Quorum Sensing: spontaneous calm gentle light wave
+    if (this.season.current === 'boreal_night') {
+      if (!this.season.lastBorealWave) this.season.lastBorealWave = now;
+      if (now - this.season.lastBorealWave > 32_000 && this.creatures.length > 0) {
+        this.season.lastBorealWave = now;
+        const living = this.creatures.filter(c => c.isAlive && !c.isSleeping);
+        if (living.length > 0) {
+          const initiator = living[Math.floor(Math.random() * living.length)];
+          initiator.emitLightWave(this.creatures, 0.65);
+        }
+      }
+    }
+  }
+
+  _updateVents(now, dt) {
+    if (!this.vents || this.vents.length === 0) return;
+    const bubbleInterval = Config.HYDROTHERMAL_VENTS?.BUBBLE_INTERVAL_MS || 3400;
+    const updraftRadius = Config.HYDROTHERMAL_VENTS?.UPDRAFT_RADIUS || 95;
+    const energyRegen = Config.HYDROTHERMAL_VENTS?.REST_ENERGY_REGEN || 0.00022;
+
+    for (let i = 0; i < this.vents.length; i++) {
+      const vent = this.vents[i];
+      vent.pulsePhase += dt * 0.0016;
+      vent.bubbleTimer += dt;
+
+      // Emit new rising bubble ring
+      if (vent.bubbleTimer > bubbleInterval) {
+        vent.bubbleTimer = 0;
+        if (vent.bubbles.length < 12) {
+          vent.bubbles.push({
+            x: vent.baseX + (Math.random() - 0.5) * 16,
+            y: vent.baseY - 10,
+            vx: (Math.random() - 0.5) * 0.12,
+            vy: 0.16 + Math.random() * 0.08,
+            radius: 3.5,
+            maxRadius: 18 + Math.random() * 10,
+            alpha: 0.70,
+            life: 1.0,
+            wobblePhase: Math.random() * Math.PI * 2,
+          });
+        }
+      }
+
+      // Update active bubble rings
+      for (let b = vent.bubbles.length - 1; b >= 0; b--) {
+        const bubble = vent.bubbles[b];
+        bubble.life -= dt * 0.00014;
+        if (bubble.life <= 0 || bubble.y < this._height * 0.60) {
+          vent.bubbles.splice(b, 1);
+          continue;
+        }
+        bubble.y -= bubble.vy * (dt / 16.67);
+        bubble.x += (bubble.vx + this.wind.x * 0.15) * (dt / 16.67) + Math.sin(bubble.wobblePhase + now * 0.0025) * 0.22;
+        bubble.radius = Math.min(bubble.maxRadius, bubble.radius + dt * 0.006);
+      }
+
+      // Creature basking & Tibetan bowl resonance
+      for (let c = 0; c < this.creatures.length; c++) {
+        const cr = this.creatures[c];
+        if (!cr.isAlive) continue;
+        const dx = Math.abs(cr.position.x - vent.baseX);
+        const dy = vent.baseY - cr.position.y;
+        if (dx < updraftRadius && dy > 0 && dy < 180) {
+          cr.ventBasking = Math.min(1.0, cr.ventBasking + dt * 0.0015);
+          cr.energy = Math.min(1.0, cr.energy + dt * energyRegen);
+          cr.fatigue = Math.max(0.0, cr.fatigue - dt * 0.0001);
+
+          if ((cr.isAncestral || cr.radius > 18) && (now - vent.lastSingingBowlTime > 16_000)) {
+            vent.lastSingingBowlTime = now;
+            this.audio.playTibetanBowl(vent.baseX / this._width, vent.baseY / this._height);
+            cr.experiencePeace(0.18);
+          }
+        }
+      }
+    }
+  }
+
+  _updateAuroraNursery(now, dt) {
+    const auroraH = this._height * (Config.AURORA_NURSERY?.HEIGHT_RATIO || 0.20);
+    const growthBoost = Config.AURORA_NURSERY?.GROWTH_BOOST || 0.00015;
+    const trailRate = Config.AURORA_NURSERY?.SHIMMER_TRAIL_RATE || 120;
+
+    for (let i = 0; i < this.creatures.length; i++) {
+      const c = this.creatures[i];
+      if (!c.isAlive) continue;
+
+      if (c.position.y < auroraH) {
+        c.auroraShimmer = 1.0;
+        if (c.growthProgress < 1.0) {
+          c.growthProgress = Math.min(1.0, c.growthProgress + dt * growthBoost);
+        }
+        if (now - this.aurora.lastChimeTime > 14_000) {
+          this.aurora.lastChimeTime = now;
+          this.audio.playAuroraChimes(c.position.x / this._width);
+        }
+      }
+
+      // Generate silver stardust particles behind shimmered creatures
+      if (c.auroraShimmer > 0.15 && c.auroraTrailTimer > trailRate) {
+        c.auroraTrailTimer = 0;
+        if (this.aurora.shimmerDust.length < 50) {
+          this.aurora.shimmerDust.push({
+            x: c.position.x + (Math.random() - 0.5) * c.radius * 0.8,
+            y: c.position.y + (Math.random() - 0.5) * c.radius * 0.8,
+            vx: (Math.random() - 0.5) * 0.06,
+            vy: -0.04 - Math.random() * 0.04,
+            alpha: 0.85 * c.auroraShimmer,
+            life: 1.0,
+            size: 1.2 + Math.random() * 1.6,
+          });
+        }
+      }
+    }
+
+    // Advance silver stardust
+    for (let d = this.aurora.shimmerDust.length - 1; d >= 0; d--) {
+      const dust = this.aurora.shimmerDust[d];
+      dust.life -= dt * 0.0012;
+      if (dust.life <= 0) {
+        this.aurora.shimmerDust.splice(d, 1);
+        continue;
+      }
+      dust.x += dust.vx * (dt / 16.67);
+      dust.y += dust.vy * (dt / 16.67);
     }
   }
 

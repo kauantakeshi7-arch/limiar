@@ -78,15 +78,29 @@ export class AudioEngine {
   }
 
   /**
-   * Per-frame audio update — modulates filter with world breath, diurnal tide, and ecology.
+   * Per-frame audio update — modulates filter with world breath, diurnal tide, seasons and ecology.
    * @param {number} now
    * @param {number} [diurnalFactor=0.5] - 1 = zenith, 0 = nadir
    * @param {Array<import('../entities/Creature.js').Creature>} [creatures=[]]
+   * @param {object|null} [season=null] - Cosmic seasons state
    */
-  update(now, diurnalFactor = 0.5, creatures = []) {
+  update(now, diurnalFactor = 0.5, creatures = [], season = null) {
     if (!this._initialized || !this._breathFilter) return;
     const breath = 0.5 + 0.5 * Math.sin(now * 0.00074);
     let cutoff = 400 + breath * 350 + diurnalFactor * 350;
+    let targetQ = 0.8;
+
+    // Seasonal acoustic atmosphere
+    if (season?.current === 'crystal_tide') {
+      cutoff += 120; // airy crystal clarity
+      targetQ = 0.95;
+    } else if (season?.current === 'boreal_night') {
+      cutoff += 160; // broad harmonic aurora resonance
+      targetQ = 1.05;
+    } else if (season?.current === 'golden_eclipse') {
+      cutoff = Math.max(220, cutoff - 100); // warm low-mid cozy dusk
+      targetQ = 0.70;
+    }
 
     // Adaptive ambient modulation based on ecology:
     if (creatures && creatures.length > 0) {
@@ -116,6 +130,7 @@ export class AudioEngine {
     }
 
     this._breathFilter.frequency.setTargetAtTime(Math.max(220, cutoff), this._ctx.currentTime, 0.1);
+    this._breathFilter.Q.setTargetAtTime(targetQ, this._ctx.currentTime, 0.2);
   }
 
   /**
@@ -257,6 +272,108 @@ export class AudioEngine {
       gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.6);
       setTimeout(() => { try { osc.stop(); } catch (_) {} }, 2800);
     });
+  }
+
+  /**
+   * Resonant 432 Hz tuned Tibetan Singing Bowl for Abyssal Hydrothermal Vents.
+   * Produces warm, soothing binaural beating and deep subaquatic lowpass resonance.
+   * @param {number} [xRatio=0.5]
+   * @param {number} [yRatio=0.95]
+   */
+  playTibetanBowl(xRatio = 0.5, yRatio = 0.95) {
+    if (!this._initialized || this.isMuted) return;
+    const now = this._ctx.currentTime;
+    if (this._lastBowlTime && now - this._lastBowlTime < 4.0) return;
+    this._lastBowlTime = now;
+
+    // 432 Hz Pythagorean sub-octaves & beating frequencies
+    const f0 = 108.0;      // Low warm drone (A2 / 432 / 4)
+    const f1 = 216.0;      // Octave
+    const f2 = 216.6;      // +0.6 Hz beating frequency for theta-wave brain entrainment
+    const f3 = 432.0;      // 432 Hz sacred third harmonic
+
+    const partials = [
+      { freq: f0, gain: 0.032, decay: 4.8 },
+      { freq: f1, gain: 0.024, decay: 4.2 },
+      { freq: f2, gain: 0.020, decay: 4.0 },
+      { freq: f3, gain: 0.014, decay: 3.2 },
+    ];
+
+    const filter = this._makeDepthFilter(yRatio);
+    const panner = this._makePanner(xRatio);
+
+    for (let i = 0; i < partials.length; i++) {
+      const p = partials[i];
+      const osc = this._ctx.createOscillator();
+      const gain = this._makeGain(0.0001);
+
+      osc.type = 'sine';
+      osc.frequency.value = p.freq;
+
+      osc.connect(gain);
+      gain.connect(filter);
+      filter.connect(panner);
+      panner.connect(this._reverb);
+
+      osc.start(now);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.linearRampToValueAtTime(p.gain, now + 0.35); // warm slow gong/bowl strike
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + p.decay);
+
+      setTimeout(() => {
+        try { osc.stop(); } catch (_) {}
+      }, (p.decay + 0.2) * 1000);
+    }
+  }
+
+  /**
+   * Ultra-high crystalline wind chimes in the upper stratum (Aurora Nursery).
+   * Pentatonic glass bells ringing airy celestial reverberation.
+   * @param {number} [xRatio=0.5]
+   */
+  playAuroraChimes(xRatio = 0.5) {
+    if (!this._initialized || this.isMuted) return;
+    const now = this._ctx.currentTime;
+    if (this._lastChimeTime && now - this._lastChimeTime < 2.5) return;
+    this._lastChimeTime = now;
+
+    // High crystalline frequencies (C6, E6, G6, B6, C7)
+    const chimeNotes = [1046.50, 1318.51, 1567.98, 1975.53, 2093.00];
+    const panner = this._makePanner(xRatio);
+    const filter = this._makeDepthFilter(0.12); // crystal airy filter
+
+    // Play a gentle cascade of 3 crystal droplets
+    const count = 3;
+    for (let i = 0; i < count; i++) {
+      const noteIdx = Math.floor(Math.random() * chimeNotes.length);
+      const freq = chimeNotes[noteIdx];
+      const t = now + i * 0.12;
+
+      const osc = this._ctx.createOscillator();
+      const osc2 = this._ctx.createOscillator();
+      const gain = this._makeGain(0.0001);
+
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      osc2.type = 'sine';
+      osc2.frequency.value = freq * 2.76; // high glass harmonic overtone
+
+      osc.connect(gain);
+      osc2.connect(gain);
+      gain.connect(filter);
+      filter.connect(panner);
+      panner.connect(this._reverb);
+
+      osc.start(t);
+      osc2.start(t);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(0.015, t + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
+
+      setTimeout(() => {
+        try { osc.stop(); osc2.stop(); } catch (_) {}
+      }, (i * 0.12 + 1.8) * 1000);
+    }
   }
 
   dispose() {

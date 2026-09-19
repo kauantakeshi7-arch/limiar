@@ -52,8 +52,10 @@ export class PhysicsSystem {
    * @param {number} [now] - Current simulation timestamp.
    * @param {object|null} [tide] - Periodic cosmic tide state.
    * @param {Array<object>} [reefs] - Sanctuary reefs in the world.
+   * @param {Array<object>} [vents] - Hydrothermal vents in the world.
+   * @param {object|null} [season] - Cosmic season state.
    */
-  update(creatures, threshold, dt, wind, touchPoints = [], activeNectar = null, now = 0, tide = null, reefs = []) {
+  update(creatures, threshold, dt, wind, touchPoints = [], activeNectar = null, now = 0, tide = null, reefs = [], vents = [], season = null) {
     const dtC  = Math.min(dt, 50);
     const time = now || performance.now();
 
@@ -64,8 +66,8 @@ export class PhysicsSystem {
       if (creature.state === CreatureState.WITNESS) continue;
       if (creature.isDancing) continue;
 
-      const steering = this._computeSteering(creature, creatures, threshold, wind, touchPoints, activeNectar, time, tide, reefs);
-      this._integrate(creature, steering, dtC);
+      const steering = this._computeSteering(creature, creatures, threshold, wind, touchPoints, activeNectar, time, tide, reefs, vents, season);
+      this._integrate(creature, steering, dtC, season);
     }
 
     this._updateSymbioticPairs(creatures, threshold, wind, dtC, time);
@@ -82,7 +84,7 @@ export class PhysicsSystem {
 
   // ── Steering composition ──────────────────────────────────────────────────
 
-  _computeSteering(creature, allCreatures, threshold, wind, touchPoints = [], activeNectar = null, now = 0, tide = null, reefs = []) {
+  _computeSteering(creature, allCreatures, threshold, wind, touchPoints = [], activeNectar = null, now = 0, tide = null, reefs = [], vents = [], season = null) {
     const wander   = this._wander(creature);
     const flock    = this._flocking(creature, allCreatures);
     const zoneAttr = this._zoneAttraction(creature, threshold);
@@ -217,6 +219,53 @@ export class PhysicsSystem {
       }
     }
 
+    // Hydrothermal Vents Updraft Convection & Ancestral Basking Attraction
+    let ventX = 0, ventY = 0;
+    if (vents && vents.length > 0 && py > this.height * 0.72) {
+      const updraftRadius = Config.HYDROTHERMAL_VENTS?.UPDRAFT_RADIUS || 95;
+      const updraftForce = Config.HYDROTHERMAL_VENTS?.UPDRAFT_FORCE || 0.24;
+      const attractRadius = Config.HYDROTHERMAL_VENTS?.ATTRACT_ANCESTRAL_RADIUS || 180;
+
+      for (let v = 0; v < vents.length; v++) {
+        const vent = vents[v];
+        const dx = px - vent.baseX;
+        const dy = vent.baseY - py;
+
+        // Updraft thermal plume
+        if (Math.abs(dx) < updraftRadius && dy > 0 && dy < 220) {
+          const horizFactor = 1 - Math.abs(dx) / updraftRadius;
+          const vertFactor = 1 - dy / 220;
+          ventY -= updraftForce * horizFactor * vertFactor;
+          ventX += (dx > 0 ? 0.04 : -0.04) * horizFactor;
+        }
+
+        // Ancestral & large creatures love basking near warm vents
+        if ((creature.isAncestral || creature.radius > 18) && Math.abs(dx) < attractRadius && dy > 0 && dy < 250) {
+          const dist = Math.hypot(dx, dy) || 1;
+          const factor = (1 - dist / attractRadius) * 0.22;
+          ventX -= (dx / dist) * factor;
+          ventY += ((vent.baseY - 70 - py) / dist) * factor;
+        }
+      }
+    }
+
+    // Aurora Nursery: featherweight floating & juvenile buoyancy
+    let auroraX = 0, auroraY = 0;
+    const auroraH = this.height * (Config.AURORA_NURSERY?.HEIGHT_RATIO || 0.20);
+    if (py < auroraH * 1.5) {
+      const isJuvenile = creature.growthProgress < 0.98 || creature.lifeStage === 'juvenile';
+      if (isJuvenile) {
+        const ascendFactor = Math.max(0, 1 - (py / (auroraH * 1.5)));
+        auroraY -= (Config.AURORA_NURSERY?.JUVENILE_BUOYANCY || 0.18) * ascendFactor;
+      }
+      if (py < auroraH) {
+        if (creature.velocity.y > 0) {
+          auroraY -= creature.velocity.y * 0.15;
+        }
+        auroraX += Math.sin(now * 0.0012 + px * 0.01) * 0.04;
+      }
+    }
+
     // Combine all steering forces into scalar accumulators (only 1 Vector2 allocated)
     const steerX = wander.x * BOIDS.WANDER
                  + flock.sepX * BOIDS.SEPARATION
@@ -231,7 +280,9 @@ export class PhysicsSystem {
                  + nectarX
                  + decisionX
                  + tideX
-                 + reefX;
+                 + reefX
+                 + ventX
+                 + auroraX;
 
     const steerY = wander.y * BOIDS.WANDER
                  + flock.sepY * BOIDS.SEPARATION
@@ -246,7 +297,9 @@ export class PhysicsSystem {
                  + nectarY
                  + decisionY
                  + tideY
-                 + reefY;
+                 + reefY
+                 + ventY
+                 + auroraY;
 
     return new Vector2(steerX, steerY);
   }
@@ -451,7 +504,7 @@ export class PhysicsSystem {
     creature.velocity.set(vx, vy);
   }
 
-  _integrate(creature, steering, dt) {
+  _integrate(creature, steering, dt, season = null) {
     const isMobile = this.width <= 600;
     let baseSpeed = Config.CREATURE.BASE_SPEED * (0.7 + creature.dna.adaptation * 0.5);
     if (isMobile) baseSpeed *= 0.85; // Extra serene pace on mobile
@@ -485,7 +538,10 @@ export class PhysicsSystem {
 
     // Viscous hydrodynamic damping (drag):
     // Mass conserves momentum longer in the celestial ether
-    const baseDrag = creature.isSleeping ? 0.94 : Math.min(0.98, 0.955 + (mass - 1) * 0.012);
+    let baseDrag = creature.isSleeping ? 0.94 : Math.min(0.98, 0.955 + (mass - 1) * 0.012);
+    if (season?.current === 'crystal_tide') {
+      baseDrag = Math.min(0.985, baseDrag + 0.005); // slightly longer, frictionless glide
+    }
     const dtFactor = Math.min(dt / 16, 2.0);
 
     // Newton's Second Law: a = (F / m) * pulseThrust

@@ -255,5 +255,42 @@ export const Config = Object.freeze({
     FORCE: 0.42,                   // Gentle lateral acceleration
   }),
 
+  // ── Cosmic Seasons (Biomas Temporais) ─────────────────────────────────────
+  SEASONS: Object.freeze({
+    SEASON_DURATION_MS: 240_000,    // 4 minutes per cosmic season
+    TRANSITION_DURATION_MS: 32_000, // 32s smooth cosine crossfade between seasons
+    TYPES: Object.freeze({
+      CRYSTAL_TIDE:   'crystal_tide',   // High translucency, quartz motes, featherweight glide
+      BOREAL_NIGHT:   'boreal_night',   // Emerald/cyan bioluminescence & quorum sensing harmonic waves
+      GOLDEN_ECLIPSE: 'golden_eclipse', // Warm cozy sunset amber light & celestial peacefulness
+    }),
+    NAMES: Object.freeze({
+      crystal_tide:   'Maré de Cristal',
+      boreal_night:   'Noite Boreal',
+      golden_eclipse: 'Eclipse Dourado',
+    }),
+  }),
+
+  // ── Hydrothermal Fissures & Abyssal Vents ─────────────────────────────────
+  HYDROTHERMAL_VENTS: Object.freeze({
+    COUNT: 3,                       // 3 abyssal vents along the deep floor
+    MIN_Y_RATIO: 0.85,              // Deep shadow realm stratum
+    BUBBLE_INTERVAL_MS: 3400,       // Interval between slow rising concentric bubble rings
+    UPDRAFT_FORCE: 0.24,            // Gentle thermal convection acceleration
+    UPDRAFT_RADIUS: 95,             // Width of rising thermal column
+    REST_ENERGY_REGEN: 0.00022,     // Thermal soothing warmth recovery rate
+    ATTRACT_ANCESTRAL_RADIUS: 180,  // Large & ancient creatures drawn to thermal vents
+  }),
+
+  // ── Aurora Nursery (Estrato Celeste Supremo) ──────────────────────────────
+  AURORA_NURSERY: Object.freeze({
+    HEIGHT_RATIO: 0.20,             // Top 20% of the canvas
+    JUVENILE_BUOYANCY: 0.18,        // Mild upward buoyancy drawing younglings to nursery
+    MICROGRAVITY_DAMPING: 0.72,     // Featherweight floating sensation
+    SHIMMER_DURATION_MS: 12_000,    // Duration of silver stardust trail
+    SHIMMER_TRAIL_RATE: 120,        // ms between stardust particle spawns
+    GROWTH_BOOST: 0.00015,          // Growth acceleration while floating in the aurora
+  }),
+
 });
 

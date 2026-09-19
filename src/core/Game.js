@@ -154,6 +154,9 @@ export class Game {
         diurnalCycle:      this._world.diurnalCycle,
         reefs:             this._world.reefs,
         tide:              this._world.tide,
+        vents:             this._world.vents,
+        aurora:            this._world.aurora,
+        season:            this._world.season,
         now:               timestamp,
         dt,
       });

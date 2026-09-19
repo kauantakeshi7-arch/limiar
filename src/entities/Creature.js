@@ -105,6 +105,13 @@ export class Creature {
     /** Cooldown timer (ms) before this creature can echo another light wave. */
     this.lightEchoCooldown = 0;
 
+    // ── Biomes & Atmospheric Nuances ─────────────────────────────────────────
+    /** Intensity [0..1] of celestial silver dust shimmer from Aurora Nursery. */
+    this.auroraShimmer     = 0;
+    this.auroraTrailTimer  = 0;
+    /** Intensity [0..1] of thermal basking warmth from Abyssal Hydrothermal Vents. */
+    this.ventBasking       = 0;
+
     // ── Metabolism ──────────────────────────────────────────────────────────
     /** Visual pulse [0..1] triggered when consuming ambient motes. */
     this.metabolicFlash = 0;
@@ -237,6 +244,12 @@ export class Creature {
     }
     if (this.state === CreatureState.TRANSCENDENT) {
       return 'Transcendeu a divisão dos mundos e brilha em harmonia absoluta.';
+    }
+    if (this.auroraShimmer > 0.15) {
+      return 'Banhando-se nos véus de aurora boreal, soltando poeira estelar prateada.';
+    }
+    if (this.ventBasking > 0.25) {
+      return 'Aquecendo-se nas correntes da fossa abissal, absorvendo calor cósmico ancestral.';
     }
 
     switch (this.decision) {
@@ -454,6 +467,13 @@ export class Creature {
     this.age += dt;
     if (this.lightEchoCooldown > 0) this.lightEchoCooldown = Math.max(0, this.lightEchoCooldown - dt);
     if (this.glowIntensity > 0) this.glowIntensity = Math.max(0, this.glowIntensity - dt * 0.00085);
+    if (this.auroraShimmer > 0) {
+      this.auroraShimmer = Math.max(0, this.auroraShimmer - dt * 0.00008);
+      this.auroraTrailTimer += dt;
+    }
+    if (this.ventBasking > 0) {
+      this.ventBasking = Math.max(0, this.ventBasking - dt * 0.0004);
+    }
 
     if (this.growthProgress < 1.0) {
       const dur = Config.ONTOGENY?.JUVENILE_DURATION_MS || 35_000;
