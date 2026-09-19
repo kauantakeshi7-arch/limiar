@@ -1,38 +1,38 @@
 /**
  * LIMIAR — PWAInstaller
  * Gerencia a instalação do ecossistema no celular (Android, iOS, Desktop PWA),
- * registro de Service Worker e guia para adição à tela inicial.
+ * captura imediata do prompt de instalação automática e guia detalhado com abas OS.
  */
 
 export class PWAInstaller {
   constructor() {
-    this._deferredPrompt = null;
+    this._deferredPrompt = window.__pwaPrompt || null;
     this._banner = document.getElementById('pwa-install-banner');
     this._btnBannerInstall = document.getElementById('btn-pwa-install');
     this._btnBannerDismiss = document.getElementById('btn-pwa-dismiss');
     this._btnHudInstall = document.getElementById('btn-install');
-    this._iosModal = document.getElementById('ios-install-modal');
-    this._iosModalClose = document.getElementById('ios-modal-close');
+    
+    // Modal e abas de instruções
+    this._guideModal = document.getElementById('ios-install-modal');
+    this._guideModalClose = document.getElementById('ios-modal-close');
+    this._tabAndroid = document.getElementById('tab-android');
+    this._tabIos = document.getElementById('tab-ios');
+    this._guideAndroid = document.getElementById('pwa-guide-android');
+    this._guideIos = document.getElementById('pwa-guide-ios');
 
     this._init();
   }
 
-  /** Inicializa ouvintes de eventos e Service Worker */
+  /** Inicializa ouvintes de eventos e integração PWA */
   _init() {
-    // 1. Registro de Service Worker para suporte PWA e offline
+    // 1. Registro do Service Worker de fallback caso ainda não tenha sido registrado pelo head
     if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-          .then((reg) => {
-            // Service worker registrado
-          })
-          .catch((err) => {
-            console.warn('[PWA] Falha ao registrar Service Worker:', err);
-          });
+      navigator.serviceWorker.register('./sw.js').catch((err) => {
+        console.warn('[PWA] Service Worker:', err);
       });
     }
 
-    // Se já estiver em modo standalone (app instalado), esconde banners e ajusta botão
+    // 2. Se já estiver em modo standalone (app instalado), esconde o banner
     if (this.isStandalone()) {
       this._btnHudInstall?.classList.add('installed');
       if (this._btnHudInstall) {
@@ -41,16 +41,26 @@ export class PWAInstaller {
       return;
     }
 
-    // 2. Captura o evento de instalação padrão do navegador (Android Chrome, Edge, Samsung Internet)
+    // 3. Captura o evento de instalação padrão do navegador
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       this._deferredPrompt = e;
+      window.__pwaPrompt = e;
       this._onInstallable();
     });
 
-    // 3. Detecta quando o app é efetivamente instalado
+    // Evento customizado disparado caso o head tenha capturado antes
+    window.addEventListener('limiar-installable', () => {
+      if (window.__pwaPrompt) {
+        this._deferredPrompt = window.__pwaPrompt;
+        this._onInstallable();
+      }
+    });
+
+    // 4. Detecta quando o app é efetivamente instalado
     window.addEventListener('appinstalled', () => {
       this._deferredPrompt = null;
+      window.__pwaPrompt = null;
       this._hideBanner();
       if (this._btnHudInstall) {
         this._btnHudInstall.classList.add('installed');
@@ -59,7 +69,7 @@ export class PWAInstaller {
       this._notify('LIMIAR instalado com sucesso na sua tela inicial! ✦');
     });
 
-    // 4. Conecta cliques nos botões de instalação
+    // 5. Conecta cliques nos botões de instalação
     this._btnBannerInstall?.addEventListener('click', (e) => {
       e.stopPropagation();
       this.promptInstall();
@@ -75,19 +85,29 @@ export class PWAInstaller {
       this.promptInstall();
     });
 
-    // Fechar modal do iOS
-    this._iosModalClose?.addEventListener('click', (e) => {
+    // 6. Controle do Modal e Abas (Android / iOS)
+    this._guideModalClose?.addEventListener('click', (e) => {
       e.stopPropagation();
-      this._closeIosModal();
+      this._closeGuideModal();
     });
 
-    this._iosModal?.addEventListener('pointerdown', (e) => {
-      if (e.target === this._iosModal) {
-        this._closeIosModal();
+    this._guideModal?.addEventListener('pointerdown', (e) => {
+      if (e.target === this._guideModal) {
+        this._closeGuideModal();
       }
     });
 
-    // 5. No iOS ou após carregamento, decide se exibe banner para novos usuários
+    this._tabAndroid?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._switchTab('android');
+    });
+
+    this._tabIos?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._switchTab('ios');
+    });
+
+    // 7. Decide se exibe banner suave após alguns segundos
     this._checkBannerEligibility();
   }
 
@@ -95,9 +115,15 @@ export class PWAInstaller {
   isStandalone() {
     return (
       window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: fullscreen)').matches ||
       window.navigator.standalone === true ||
       document.referrer.includes('android-app://')
     );
+  }
+
+  /** Detecta se o dispositivo é Android */
+  isAndroid() {
+    return /android/i.test(window.navigator.userAgent);
   }
 
   /** Detecta se o dispositivo é iOS (iPhone/iPad/iPod) */
@@ -115,11 +141,26 @@ export class PWAInstaller {
     this._checkBannerEligibility();
   }
 
-  /** Verifica elegibilidade e exibe banner suavemente após alguns segundos */
+  /** Alterna entre abas Android e iOS no modal */
+  _switchTab(os) {
+    if (os === 'android') {
+      this._tabAndroid?.classList.add('active');
+      this._tabIos?.classList.remove('active');
+      this._guideAndroid?.classList.remove('hidden');
+      this._guideIos?.classList.add('hidden');
+    } else {
+      this._tabIos?.classList.add('active');
+      this._tabAndroid?.classList.remove('active');
+      this._guideIos?.classList.remove('hidden');
+      this._guideAndroid?.classList.add('hidden');
+    }
+  }
+
+  /** Verifica elegibilidade e exibe banner suavemente */
   _checkBannerEligibility() {
     if (this.isStandalone()) return;
 
-    // Se usuário dispensou recentemente (últimos 3 dias), não incomoda
+    // Se usuário dispensou recentemente (últimos 3 dias), respeita a decisão
     try {
       const dismissed = localStorage.getItem('limiar_pwa_dismissed_at');
       if (dismissed) {
@@ -130,19 +171,18 @@ export class PWAInstaller {
       }
     } catch (_) {}
 
-    // Exibe após 4 segundos de contemplação para não sobrecarregar a entrada
+    // Exibe após 3.5 segundos de contemplação inicial
     setTimeout(() => {
       if (!this.isStandalone()) {
         this._showBanner();
       }
-    }, 4500);
+    }, 3500);
   }
 
   /** Exibe o banner discreto no rodapé */
   _showBanner() {
     if (!this._banner) return;
     this._banner.classList.remove('hidden');
-    // Adiciona classe de animação suave
     requestAnimationFrame(() => {
       this._banner.classList.add('visible');
     });
@@ -165,65 +205,69 @@ export class PWAInstaller {
     } catch (_) {}
   }
 
-  /** Executa a ação de instalação */
+  /**
+   * Executa a ação de instalação:
+   * Prioridade 1: Instalação automática nativa (1 clique via prompt do sistema)
+   * Prioridade 2: Guia inteligente com a aba do sistema do usuário já ativa
+   */
   async promptInstall() {
-    // Caso 1: Já está em modo standalone
     if (this.isStandalone()) {
       this._notify('O LIMIAR já está instalado no seu dispositivo! ✦');
       return;
     }
 
-    // Caso 2: Navegador suporta beforeinstallprompt nativo (Chrome Android, Edge, etc.)
-    if (this._deferredPrompt) {
-      const prompt = this._deferredPrompt;
-      this._deferredPrompt = null;
+    const prompt = this._deferredPrompt || window.__pwaPrompt;
+
+    // Se temos o prompt nativo disponível (Chrome Android, Edge, Samsung Internet), dispara a instalação com 1 toque!
+    if (prompt) {
       try {
         await prompt.prompt();
         const { outcome } = await prompt.userChoice;
         if (outcome === 'accepted') {
           this._hideBanner();
+          this._notify('Instalando o LIMIAR na sua tela inicial... ✦');
         }
+        this._deferredPrompt = null;
+        window.__pwaPrompt = null;
+        return;
       } catch (err) {
-        console.warn('[PWA] Erro ao invocar prompt:', err);
+        console.warn('[PWA] Erro no prompt nativo:', err);
       }
-      return;
     }
 
-    // Caso 3: iOS Safari (requer ação manual através de Compartilhar > Adicionar à Tela de Início)
-    if (this.isIOS()) {
-      this._openIosModal();
-      return;
-    }
-
-    // Caso 4: Outros navegadores mobile ou desktop sem suporte a prompt programático direto
-    this._openGenericGuideModal();
+    // Caso não haja prompt automático disponível (iOS Safari, navegadores in-app ou Firefox):
+    // Abre o modal orientativo já posicionado na aba correta (Android ou iOS)
+    this._openGuideModal();
   }
 
-  /** Abre modal instrutivo exclusivo para iPhone / iPad */
-  _openIosModal() {
-    if (!this._iosModal) return;
+  /** Abre o modal de guia posicionando automaticamente na aba correspondente ao dispositivo */
+  _openGuideModal() {
+    if (!this._guideModal) return;
     this._hideBanner();
-    this._iosModal.classList.remove('hidden');
+
+    // Auto-seleciona a aba apropriada para o usuário
+    if (this.isIOS()) {
+      this._switchTab('ios');
+    } else {
+      this._switchTab('android'); // Default para Android / outros navegadores
+    }
+
+    this._guideModal.classList.remove('hidden');
     requestAnimationFrame(() => {
-      this._iosModal.classList.add('visible');
+      this._guideModal.classList.add('visible');
     });
   }
 
-  /** Fecha modal do iOS */
-  _closeIosModal() {
-    if (!this._iosModal) return;
-    this._iosModal.classList.remove('visible');
+  /** Fecha o modal de guia */
+  _closeGuideModal() {
+    if (!this._guideModal) return;
+    this._guideModal.classList.remove('visible');
     setTimeout(() => {
-      this._iosModal.classList.add('hidden');
+      this._guideModal.classList.add('hidden');
     }, 300);
   }
 
-  /** Abre modal de orientação genérica para navegadores sem prompt automático */
-  _openGenericGuideModal() {
-    this._openIosModal(); // Compartilha o modal estilizado com instruções universais
-  }
-
-  /** Pequena notificação temporária no topo ou centro */
+  /** Pequena notificação temporária no topo */
   _notify(message) {
     const toast = document.createElement('div');
     toast.className = 'pwa-toast';

@@ -13,6 +13,19 @@
   <link rel="apple-touch-icon" href="icons/icon-192.svg">
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="style.css">
+  <script>
+    // Early capture of PWA installation prompt
+    window.__pwaPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      window.__pwaPrompt = e;
+      window.dispatchEvent(new CustomEvent('limiar-installable'));
+    });
+    // Instant ServiceWorker registration so PWA criteria are met immediately
+    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
+  </script>
 </head>
 <body>
 
@@ -112,36 +125,84 @@
     </div>
   </div>
 
-  <!-- ── iOS / Mobile PWA Guide Modal ────────────────────────────── -->
+  <!-- ── Mobile PWA Guide Modal (Android + iOS) ────────────────── -->
   <div id="ios-install-modal" class="overlay hidden" role="dialog" aria-label="Como instalar no celular">
-    <div class="overlay-inner ios-modal-inner">
+    <div class="overlay-inner install-modal-inner">
       <div class="overlay-header">
         <h2>Instalar no Celular</h2>
         <button id="ios-modal-close" class="close-btn" aria-label="Fechar">×</button>
       </div>
-      <div class="scroll-area ios-guide-body">
+
+      <!-- OS Selector Tabs -->
+      <div class="pwa-tabs">
+        <button id="tab-android" class="pwa-tab-btn active" type="button">🤖 Android</button>
+        <button id="tab-ios" class="pwa-tab-btn" type="button">🍎 iPhone / iPad</button>
+      </div>
+
+      <!-- Android Instructions -->
+      <div id="pwa-guide-android" class="scroll-area pwa-guide-content">
         <div class="ios-guide-step">
           <span class="step-num">1</span>
           <div class="step-text">
-            <strong>Toque em Compartilhar</strong>
-            <p>No Safari do seu iPhone/iPad, toque no ícone de compartilhamento <span class="ios-inline-icon">⎋</span> na barra de navegação.</p>
+            <strong>Abra no Chrome</strong>
+            <p>Se abriu o link pelo Instagram ou WhatsApp, toque nos <strong>3 pontinhos (⋮)</strong> e escolha <em>"Abrir no Chrome"</em>.</p>
           </div>
         </div>
         <div class="ios-guide-step">
           <span class="step-num">2</span>
           <div class="step-text">
-            <strong>Adicionar à Tela de Início</strong>
-            <p>Role a lista de opções e toque em <span class="ios-inline-icon">➕</span> <em>"Adicionar à Tela de Início"</em>.</p>
+            <strong>Menu do Navegador</strong>
+            <p>No Chrome, toque no botão de menu <span class="ios-inline-icon">⋮</span> no canto superior direito.</p>
           </div>
         </div>
         <div class="ios-guide-step">
           <span class="step-num">3</span>
+          <div class="step-text">
+            <strong>Instalar Aplicativo</strong>
+            <p>Toque na opção <span class="ios-inline-icon">📲</span> <strong>"Instalar aplicativo"</strong> ou <strong>"Adicionar à tela inicial"</strong>.</p>
+          </div>
+        </div>
+        <div class="ios-guide-step">
+          <span class="step-num">4</span>
+          <div class="step-text">
+            <strong>Confirmar</strong>
+            <p>Toque em <em>"Instalar"</em>. O ícone aparecerá na sua tela inicial e abrirá direto em tela cheia sem barras!</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- iOS Instructions -->
+      <div id="pwa-guide-ios" class="scroll-area pwa-guide-content hidden">
+        <div class="ios-guide-step">
+          <span class="step-num">1</span>
+          <div class="step-text">
+            <strong>Abra no Safari</strong>
+            <p>No iPhone ou iPad, certifique-se de estar usando o navegador <strong>Safari</strong>.</p>
+          </div>
+        </div>
+        <div class="ios-guide-step">
+          <span class="step-num">2</span>
+          <div class="step-text">
+            <strong>Toque em Compartilhar</strong>
+            <p>Toque no ícone de compartilhamento <span class="ios-inline-icon">⎋</span> na barra inferior do Safari.</p>
+          </div>
+        </div>
+        <div class="ios-guide-step">
+          <span class="step-num">3</span>
+          <div class="step-text">
+            <strong>Adicionar à Tela de Início</strong>
+            <p>Role a lista de opções para baixo e toque em <span class="ios-inline-icon">➕</span> <strong>"Adicionar à Tela de Início"</strong>.</p>
+          </div>
+        </div>
+        <div class="ios-guide-step">
+          <span class="step-num">4</span>
           <div class="step-text">
             <strong>Confirmar</strong>
             <p>Toque em <em>"Adicionar"</em> no topo para iniciar o LIMIAR em tela cheia como um aplicativo independente.</p>
           </div>
         </div>
       </div>
+
     </div>
   </div>
 
