@@ -70,6 +70,35 @@ export class PhysicsSystem {
       this._integrate(creature, steering, dtC, season);
     }
 
+    // ── Elastic non-penetration relaxation pass ────────────────────────────
+    // Guarantees no two creatures overlap after integration.
+    // Pure scalar math — zero allocations, runs O(n²) but n ≤ 16 (≈128 ops/frame).
+    for (let i = 0; i < creatures.length; i++) {
+      const a = creatures[i];
+      if (!a.isAlive || a.isDancing) continue;
+      for (let j = i + 1; j < creatures.length; j++) {
+        const b = creatures[j];
+        if (!b.isAlive || b.isDancing) continue;
+
+        const dx      = b.position.x - a.position.x;
+        const dy      = b.position.y - a.position.y;
+        const distSq  = dx * dx + dy * dy;
+        const minDist = a.radius + b.radius;
+
+        if (distSq < minDist * minDist && distSq > 0.001) {
+          const dist    = Math.sqrt(distSq);
+          const overlap = (minDist - dist) * 0.5;
+          const nx      = dx / dist;
+          const ny      = dy / dist;
+          // Push apart along collision normal — equal share for equal mass
+          a.position.x -= nx * overlap;
+          a.position.y -= ny * overlap;
+          b.position.x += nx * overlap;
+          b.position.y += ny * overlap;
+        }
+      }
+    }
+
     this._updateSymbioticPairs(creatures, threshold, wind, dtC, time);
     this._updateDancingPairs(creatures, dtC);
 
@@ -88,7 +117,11 @@ export class PhysicsSystem {
     const wander   = this._wander(creature);
     const flock    = this._flocking(creature, allCreatures);
     const zoneAttr = this._zoneAttraction(creature, threshold);
-    const boundary = this._boundary(creature);
+    // Pass creature's native zone homeY so corner deflection aims at the right territory
+    const homeY    = creature.originZone === Config.ZONE.LIGHT
+      ? threshold.y * 0.40
+      : threshold.y + (this.height - threshold.y) * 0.55;
+    const boundary = this._boundary(creature, homeY);
     const threshAv = this._thresholdAvoidance(creature, threshold);
 
     // Dynamic reaction to player touch & expanding ripple surf (gentle, poetic reaction)
@@ -193,9 +226,12 @@ export class PhysicsSystem {
     }
 
     // Sanctuary Reef Rest Attraction (for tired, hungry, resting, or juvenile creatures)
+    // Within 45px: transitions to tangential soft-orbit so creatures cruise around
+    // the reef instead of piling up at its centre point.
     let reefX = 0, reefY = 0;
     if (reefs && reefs.length > 0 && (creature.fatigue > 0.35 || creature.energy < 0.65 || creature.growthProgress < 1.0 || creature.decision === 'rest')) {
       const attractDist = Config.SANCTUARIES?.REST_ATTRACT_RADIUS || 140;
+      const orbitBlendDist = 45; // below this: blend radial→tangential
       let closestReef = null;
       let closestDistSq = Infinity;
       for (let r = 0; r < reefs.length; r++) {
@@ -210,14 +246,27 @@ export class PhysicsSystem {
           }
         }
       }
-      if (closestReef && closestDistSq < attractDist * attractDist && closestDistSq > 16) {
-        const dist = Math.sqrt(closestDistSq);
-        const factor = (1 - dist / attractDist) * 0.45;
-        const invD = 1 / dist;
-        reefX = (closestReef.baseX - px) * invD * factor;
-        reefY = (closestReef.baseY - py) * invD * factor;
+      if (closestReef && closestDistSq < attractDist * attractDist && closestDistSq > 4) {
+        const dist    = Math.sqrt(closestDistSq);
+        const factor  = (1 - dist / attractDist) * 0.40;
+        const invD    = 1 / dist;
+        const radX    = (closestReef.baseX - px) * invD;
+        const radY    = (closestReef.baseY - py) * invD;
+
+        if (dist < orbitBlendDist) {
+          // Blend radial pull into tangential clockwise orbit
+          const t    = 1 - dist / orbitBlendDist; // 0 at edge, 1 at centre
+          const tanX = -radY; // left-perpendicular = clockwise
+          const tanY =  radX;
+          reefX = (radX * (1 - t) + tanX * t) * factor;
+          reefY = (radY * (1 - t) + tanY * t) * factor;
+        } else {
+          reefX = radX * factor;
+          reefY = radY * factor;
+        }
       }
     }
+
 
     // Hydrothermal Vents Updraft Convection & Ancestral Basking Attraction
     let ventX = 0, ventY = 0;
@@ -339,24 +388,32 @@ export class PhysicsSystem {
   }
 
   /**
-   * Unified Flocking: Computes Separation, Cohesion, and Alignment in a SINGLE pass.
-   * Eliminates redundant distance calculations, intermediate vector allocations, and reduces loops by 66%.
+   * Unified Flocking: Separation · Cohesion · Alignment in a single O(n) pass.
+   *
+   * Anti-clumping design:
+   *  - Separation radius is DYNAMIC: max(fixedBase, (rA+rB)×1.75) — larger creatures
+   *    keep proportionally larger personal space automatically.
+   *  - Repulsion uses inverse-quadratic (1-t)² and is NOT averaged by count, so a
+   *    crowd of neighbours compounds the push instead of diluting it.
+   *  - Cohesion is SUPPRESSED when dist < (rA+rB)×2.5 — it only attracts genuinely
+   *    distant solitary members; it never tightens an already-close cluster.
    */
   _flocking(creature, allCreatures) {
-    const isMobile = this.width <= 600;
-    const sepRadius = isMobile ? 32 : Config.STEERING.SEPARATION_RADIUS;
-    const cohRadius = BOIDS.COHESION_RADIUS;
-    const alignRadius = BOIDS.ALIGNMENT_RADIUS;
+    const isMobile   = this.width <= 600;
+    const baseSepR   = isMobile ? 32 : Config.STEERING.SEPARATION_RADIUS; // 40 desktop
+    const cohRadius  = BOIDS.COHESION_RADIUS;   // 130
+    const alignRadius = BOIDS.ALIGNMENT_RADIUS; // 95
+    const rA         = creature.radius;
 
-    const maxDist = Math.max(sepRadius, cohRadius, alignRadius);
+    const maxDist   = Math.max(baseSepR * 2.5, cohRadius, alignRadius);
     const maxDistSq = maxDist * maxDist;
 
-    let sepX = 0, sepY = 0, sepCount = 0;
+    let sepX = 0, sepY = 0;
     let cohSumX = 0, cohSumY = 0, cohWeightSum = 0;
     let alignSumVx = 0, alignSumVy = 0, alignWeightSum = 0;
 
-    const px = creature.position.x;
-    const py = creature.position.y;
+    const px   = creature.position.x;
+    const py   = creature.position.y;
     const zone = creature.originZone;
 
     for (let i = 0; i < allCreatures.length; i++) {
@@ -366,60 +423,59 @@ export class PhysicsSystem {
       const dx = other.position.x - px;
       const dy = other.position.y - py;
       const distSq = dx * dx + dy * dy;
-
       if (distSq > maxDistSq || distSq < 0.001) continue;
-      const dist = Math.sqrt(distSq);
 
-      // 1. Separation (all creatures regardless of zone)
-      if (dist < sepRadius) {
-        const factor = (1 - dist / sepRadius) / dist;
-        sepX -= dx * factor;
-        sepY -= dy * factor;
-        sepCount++;
+      const dist = Math.sqrt(distSq);
+      const rB   = other.radius;
+
+      // ── 1. Separation (all creatures, radius-aware) ──────────────────────
+      const minComfort = Math.max(baseSepR, (rA + rB) * 1.75);
+      if (dist < minComfort) {
+        const t      = dist / minComfort;
+        const repStr = Math.pow(1 - t, 2) * 2.2; // inverse-quadratic, strong near-field
+        const invD   = 1 / dist;
+        sepX -= dx * invD * repStr;               // compounded per neighbour, not averaged
+        sepY -= dy * invD * repStr;
       }
 
-      // 2. Cohesion & Alignment (same zone only)
+      // ── 2. Cohesion & Alignment (same zone only) ─────────────────────────
       if (other.originZone === zone) {
-        if (dist < cohRadius) {
-          const w = 1 - dist / cohRadius;
-          cohSumX += other.position.x * w;
-          cohSumY += other.position.y * w;
+        // Cohesion: only when genuinely distant — never tighten a close cluster
+        const cohInhibitDist = (rA + rB) * 2.5;
+        if (dist > cohInhibitDist && dist < cohRadius) {
+          const w      = 1 - dist / cohRadius;
+          cohSumX      += other.position.x * w;
+          cohSumY      += other.position.y * w;
           cohWeightSum += w;
         }
+
         if (dist < alignRadius) {
-          const w = 1 - dist / alignRadius;
-          alignSumVx += other.velocity.x * w;
-          alignSumVy += other.velocity.y * w;
+          const w       = 1 - dist / alignRadius;
+          alignSumVx   += other.velocity.x * w;
+          alignSumVy   += other.velocity.y * w;
           alignWeightSum += w;
         }
       }
     }
 
-    // Process Separation force
-    let sepForceX = 0, sepForceY = 0;
-    if (sepCount > 0) {
-      sepForceX = sepX / sepCount;
-      sepForceY = sepY / sepCount;
-    }
-
-    // Process Cohesion force
+    // ── Normalise cohesion ────────────────────────────────────────────────────
     let cohForceX = 0, cohForceY = 0;
     if (cohWeightSum > 0.01) {
       const toCenterX = (cohSumX / cohWeightSum) - px;
       const toCenterY = (cohSumY / cohWeightSum) - py;
-      const cDist = Math.sqrt(toCenterX * toCenterX + toCenterY * toCenterY);
+      const cDist     = Math.sqrt(toCenterX * toCenterX + toCenterY * toCenterY);
       if (cDist >= 15) {
         cohForceX = toCenterX / cDist;
         cohForceY = toCenterY / cDist;
       }
     }
 
-    // Process Alignment force
+    // ── Normalise alignment ───────────────────────────────────────────────────
     let alignForceX = 0, alignForceY = 0;
     if (alignWeightSum > 0.01) {
       const avgVx = alignSumVx / alignWeightSum;
       const avgVy = alignSumVy / alignWeightSum;
-      const vMag = Math.sqrt(avgVx * avgVx + avgVy * avgVy);
+      const vMag  = Math.sqrt(avgVx * avgVx + avgVy * avgVy);
       if (vMag >= 0.001) {
         alignForceX = avgVx / vMag;
         alignForceY = avgVy / vMag;
@@ -427,9 +483,9 @@ export class PhysicsSystem {
     }
 
     return {
-      sepX: sepForceX, sepY: sepForceY,
+      sepX, sepY,
       cohX: cohForceX, cohY: cohForceY,
-      alignX: alignForceX, alignY: alignForceY
+      alignX: alignForceX, alignY: alignForceY,
     };
   }
 
@@ -450,16 +506,47 @@ export class PhysicsSystem {
     return { x: dx * scale, y: dy * scale };
   }
 
-  /** Boundary: soft repulsion from canvas edges (zero-allocation scalar math). */
-  _boundary(creature) {
+  /**
+   * Boundary: soft quadratic repulsion from canvas edges.
+   * Margin of 85px ensures creatures feel the wall early and turn decisively,
+   * never drifting to the edge before reacting.
+   * Corner deflection adds an extra push toward open space when two edges
+   * are simultaneously close, preventing corner-stall traps.
+   */
+  _boundary(creature, homeY = null) {
     const { x, y } = creature.position;
-    const margin = 40;
+    const margin = 85;
     let fx = 0, fy = 0;
 
-    if (x < margin)               fx += (margin - x) / margin;
-    if (x > this.width - margin)  fx -= (x - (this.width - margin)) / margin;
-    if (y < margin)               fy += (margin - y) / margin;
-    if (y > this.height - margin) fy -= (y - (this.height - margin)) / margin;
+    const distL = x;
+    const distR = this.width - x;
+    const distT = y;
+    const distB = this.height - y;
+
+    // Quadratic repulsion — power 1.6 gives steep near-wall gradient
+    if (distL < margin) {
+      fx += Math.pow((margin - distL) / margin, 1.6) * 2.2;
+    }
+    if (distR < margin) {
+      fx -= Math.pow((margin - distR) / margin, 1.6) * 2.2;
+    }
+    if (distT < margin) {
+      fy += Math.pow((margin - distT) / margin, 1.6) * 2.2;
+    }
+    if (distB < margin) {
+      fy -= Math.pow((margin - distB) / margin, 1.6) * 2.2;
+    }
+
+    // Corner trap deflection: if near two walls, push strongly to open centre
+    const cornerZone = margin * 0.65;
+    if ((distL < cornerZone || distR < cornerZone) && (distT < cornerZone || distB < cornerZone)) {
+      const cy = homeY ?? (this.height * 0.5);
+      const toCX = (this.width * 0.5) - x;
+      const toCY = cy - y;
+      const d    = Math.sqrt(toCX * toCX + toCY * toCY) || 1;
+      fx += (toCX / d) * 1.8;
+      fy += (toCY / d) * 1.8;
+    }
 
     return { x: fx, y: fy };
   }
@@ -480,25 +567,32 @@ export class PhysicsSystem {
 
   // ── Integration ───────────────────────────────────────────────────────────
 
+  /**
+   * Hard boundary: prevents creatures from escaping the visible canvas.
+   * Uses elastic reflection (not 0.6× speed kill) so creatures always bounce
+   * away from walls with enough momentum to escape — no more corner stalls.
+   * Minimum exit speed of 0.45 guarantees even sleeping creatures drift free.
+   */
   _clampToBounds(creature) {
-    const pad = Math.max(8, creature.radius * 0.8);
+    const pad  = Math.max(8, creature.radius * 0.8);
     let vx = creature.velocity.x;
     let vy = creature.velocity.y;
+    const minExit = 0.45; // minimum healthy escape speed away from wall
 
     if (creature.position.x < pad) {
       creature.position.x = pad;
-      vx = Math.abs(vx) * 0.6;
+      vx = Math.max(Math.abs(vx), minExit) * 0.85; // reflect towards right, soft membrane damping
     } else if (creature.position.x > this.width - pad) {
       creature.position.x = this.width - pad;
-      vx = -Math.abs(vx) * 0.6;
+      vx = -Math.max(Math.abs(vx), minExit) * 0.85; // reflect towards left
     }
 
     if (creature.position.y < pad) {
       creature.position.y = pad;
-      vy = Math.abs(vy) * 0.6;
+      vy = Math.max(Math.abs(vy), minExit) * 0.85; // reflect downward
     } else if (creature.position.y > this.height - pad) {
       creature.position.y = this.height - pad;
-      vy = -Math.abs(vy) * 0.6;
+      vy = -Math.max(Math.abs(vy), minExit) * 0.85; // reflect upward
     }
 
     creature.velocity.set(vx, vy);
