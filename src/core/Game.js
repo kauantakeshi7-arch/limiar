@@ -129,7 +129,10 @@ export class Game {
       // Update active inspect card telemetry
       this._inspectCard.update();
 
-      // Prune expired ripples (duration: 1800ms)
+      // Prune expired ripples (duration: 1800ms) and limit maximum concurrent ripples
+      if (this._ripples.length > 20) {
+        this._ripples.splice(0, this._ripples.length - 20);
+      }
       this._ripples = this._ripples.filter(r => timestamp - r.startTime < 1800);
 
       this._renderer.render({

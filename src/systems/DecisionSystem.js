@@ -241,7 +241,7 @@ export class DecisionSystem {
       case 'flee':
         creature.decisionTarget = senses.closestThreat
           ? { x: senses.closestThreat.position.x, y: senses.closestThreat.position.y }
-          : { x: creature.position.x, y: creature.originZone === Config.ZONE.LIGHT ? 80 : 700 };
+          : { x: creature.position.x, y: creature.originZone === Config.ZONE.LIGHT ? threshold.y * 0.35 : threshold.y + 120 };
         creature.decisionLockMs = 1600; // calm commitment to retreat
         if (creature.isSleeping) creature.wake();
         break;
@@ -281,6 +281,11 @@ export class DecisionSystem {
   // ── Poetic Consciousness Events ───────────────────────────────────────────
 
   _recordConsciousEvent(creature, senses, now) {
+    if (this._diaryCooldowns.size > 60) {
+      for (const [k, time] of this._diaryCooldowns) {
+        if (now - time > 60_000) this._diaryCooldowns.delete(k);
+      }
+    }
     const key = `${creature.id}:${creature.decision}`;
     const lastTime = this._diaryCooldowns.get(key) || 0;
     if (now - lastTime < 40_000) return; // serene diary pacing (40s cooldown per conscious act)

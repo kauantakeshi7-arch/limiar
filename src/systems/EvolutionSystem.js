@@ -230,6 +230,10 @@ export class EvolutionSystem {
 
   _checkSingularity(creatures, now, audio, particles) {
     if (this._singularityTarget) {
+      if (!this._singularityTarget.isAlive) {
+        this._singularityTarget = null;
+        return;
+      }
       if (now >= this._singularityEnd) {
         this._singularityTarget.singularityGrow = false;
         this._singularityTarget.isAlive = false;

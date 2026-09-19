@@ -225,6 +225,7 @@ export class World {
     const released = this.threshold.brushFlora(px, py, this._width);
     if (released && released.length > 0) {
       for (const r of released) {
+        if (this.activeSpores.length >= 32) this.activeSpores.shift();
         this.activeSpores.push({
           x: r.x,
           y: r.y,
@@ -258,6 +259,7 @@ export class World {
       decay: 0.0008,
       createdAt: performance.now(),
     };
+    if (this.playerCalls.length >= 8) this.playerCalls.shift();
     this.playerCalls.push(call);
     this.audio.playPlayerCall(px / this._width);
     globalBus.emit(Events.PLAYER_CALL, { x: px, y: py });

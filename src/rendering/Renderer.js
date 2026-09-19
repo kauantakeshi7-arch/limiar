@@ -74,6 +74,9 @@ export class Renderer {
    * @param {import('../entities/Creature.js').Creature} creature
    */
   registerEcho(creature) {
+    if (this._echoes.length >= 32) {
+      this._echoes.shift();
+    }
     this._echoes.push({
       x:      creature.position.x,
       y:      creature.position.y,
@@ -1838,8 +1841,9 @@ export class Renderer {
     // Subtle craters (fixed random circles on the moon face)
     ctx.save();
     ctx.globalAlpha = t * 0.12;
+    ctx.beginPath();
+    ctx.arc(moonX, moonY, moonR, 0, Math.PI * 2);
     ctx.clip(); // clip to moon disk
-    ctx.beginPath(); ctx.arc(moonX, moonY, moonR, 0, Math.PI * 2); ctx.clip();
     const craters = [[0.3, 0.2, 0.15], [-0.2, 0.35, 0.1], [0.1, -0.3, 0.08], [-0.35, -0.1, 0.12]];
     for (const [cx, cy, cr] of craters) {
       ctx.beginPath();
