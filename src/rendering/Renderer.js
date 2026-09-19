@@ -213,10 +213,6 @@ export class Renderer {
         this._drawSanctuaries(ctx, reefs, now, w, h, wind, tide);
       }
 
-      // 5.8. Hydrothermal Vents & Abyssal Bubble Rings (Fossa das Fumarolas)
-      if (vents && vents.length > 0) {
-        this._drawHydrothermalVents(ctx, vents, now, w, h);
-      }
 
       // 6. Threshold (tension waves + harp impulses + living flora reeds + diurnal tint)
       this._drawThreshold(ctx, w, h, ty, ea, now, creatures, tension, breath, threshold, diurnalCycle);
@@ -789,80 +785,7 @@ export class Renderer {
     ctx.restore();
   }
 
-  // ── 5.8. Hydrothermal Vents & Bubble Rings (Fossa das Fumarolas) ───────────
 
-  _drawHydrothermalVents(ctx, vents, now, w, h) {
-    if (!vents || vents.length === 0) return;
-
-    ctx.save();
-    for (let i = 0; i < vents.length; i++) {
-      const vent = vents[i];
-      const vx = vent.baseX;
-      const vy = vent.baseY;
-      const pulse = 0.5 + 0.5 * Math.sin(now * 0.0022 + vent.pulsePhase);
-
-      // 1. Rising Convective Thermal Plume (Magenta & Carmine gradient)
-      const plumeH = 170;
-      const plumeW = 55 + pulse * 14;
-      const plumeGrad = ctx.createRadialGradient(vx, vy - 10, 8, vx, vy - plumeH * 0.5, plumeW * 1.4);
-      plumeGrad.addColorStop(0, `rgba(244, 63, 94, ${0.28 + pulse * 0.12})`);
-      plumeGrad.addColorStop(0.45, `rgba(225, 29, 72, ${0.12 + pulse * 0.06})`);
-      plumeGrad.addColorStop(1, 'rgba(190, 24, 93, 0)');
-
-      ctx.beginPath();
-      ctx.moveTo(vx - 14, vy);
-      ctx.quadraticCurveTo(vx - plumeW, vy - plumeH * 0.5, vx, vy - plumeH);
-      ctx.quadraticCurveTo(vx + plumeW, vy - plumeH * 0.5, vx + 14, vy);
-      ctx.closePath();
-      ctx.fillStyle = plumeGrad;
-      ctx.fill();
-
-      // 2. Basalt Chimney Base (dark volcanic obsidian rock mound)
-      ctx.beginPath();
-      ctx.moveTo(vx - 22, vy + 12);
-      ctx.lineTo(vx - 15, vy - 14);
-      ctx.lineTo(vx + 15, vy - 14);
-      ctx.lineTo(vx + 22, vy + 12);
-      ctx.closePath();
-      ctx.fillStyle = '#090214';
-      ctx.strokeStyle = '#1e0836';
-      ctx.lineWidth = 1.8;
-      ctx.fill();
-      ctx.stroke();
-
-      // Glowing volcanic throat fissure
-      ctx.beginPath();
-      ctx.ellipse(vx, vy - 14, 11, 4, 0, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(244, 63, 94, ${0.85 + pulse * 0.15})`;
-      ctx.shadowColor = '#f43f5e';
-      ctx.shadowBlur = 12 + pulse * 6;
-      ctx.fill();
-
-      // 3. Concentric Expanding Bubble Rings
-      for (let b = 0; b < vent.bubbles.length; b++) {
-        const bubble = vent.bubbles[b];
-        const bAlpha = Math.max(0, Math.min(1, bubble.life * bubble.alpha));
-        if (bAlpha < 0.01) continue;
-
-        ctx.beginPath();
-        ctx.arc(bubble.x, bubble.y, Math.max(1, bubble.radius), 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(251, 113, 133, ${bAlpha * 0.8})`;
-        ctx.lineWidth = 1.4;
-        ctx.shadowColor = 'rgba(244, 63, 94, 0.9)';
-        ctx.shadowBlur = 8;
-        ctx.stroke();
-
-        // Inner glowing core
-        if (bubble.radius > 5) {
-          ctx.beginPath();
-          ctx.arc(bubble.x, bubble.y, Math.max(1, bubble.radius * 0.4), 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(255, 228, 230, ${bAlpha * 0.5})`;
-          ctx.fill();
-        }
-      }
-    }
-    ctx.restore();
-  }
 
   // ── 11.6. Silver Stardust Trails ───────────────────────────────────────────
 
