@@ -8,6 +8,7 @@ import { EvolutionSystem } from '../systems/EvolutionSystem.js';
 import { InteractionSystem } from '../systems/InteractionSystem.js';
 import { SpawnSystem } from '../systems/SpawnSystem.js';
 import { DecisionSystem } from '../systems/DecisionSystem.js';
+import { GraceSystem } from '../systems/GraceSystem.js';
 import { Diary } from '../ui/Diary.js';
 import { Bestiary } from '../ui/Bestiary.js';
 import { Config } from '../core/Config.js';
@@ -51,6 +52,7 @@ export class World {
     this.audio      = new AudioEngine();
     this.diary      = new Diary();
     this.bestiary   = new Bestiary();
+    this.grace      = new GraceSystem(this);
 
     this._decision    = new DecisionSystem();
     this._physics     = new PhysicsSystem(width, height);
@@ -281,6 +283,7 @@ export class World {
     this._updateEtherStreams(now, dt);
     this._updateConstellations(now, dt);
     this._updateVortices(now, dt);
+    this.grace.update(now, dt);
 
     // 5. Physics: steering, movement, sleep damping, dance, nectar pull, thermocline convection, tide, reefs, vents, aurora & ether winds
     this._physics.update(this.creatures, this.threshold, dt, this.wind, touchPoints, this.activeNectar, now, this.tide, this.reefs, this.vents, this.season, this.etherStreams);
@@ -428,6 +431,10 @@ export class World {
     this.particles.emitEtherMote(x, y, vx, vy);
   }
 
+  weaveConstellation(creatureA, creatureB) {
+    return this.addConstellation(creatureA, creatureB);
+  }
+
   /**
    * "Fiação de Constelações" — weave a temporary starlight filament connecting two creatures.
    * @param {import('../entities/Creature.js').Creature} creatureA
@@ -453,12 +460,18 @@ export class World {
       this.constellations.shift();
     }
 
+    const baseDuration = Config.CONSTELLATIONS?.DURATION_MS || 7500;
+    const duration = this.grace?.hasStellarVeil
+      ? (Config.GRACE?.BLESSINGS?.STELLAR_VEIL?.extendedDurationMs || 15000)
+      : baseDuration;
+
     this.constellations.push({
       id: `constell_${creatureA.id}_${creatureB.id}`,
       creatureA,
       creatureB,
       createdAt: performance.now(),
-      duration: Config.CONSTELLATIONS?.DURATION_MS || 7500,
+      duration,
+      lifespan: duration,
       life: 1.0,
     });
 
@@ -487,6 +500,7 @@ export class World {
     }
 
     this.diary.add(`✨ Constelação efêmera tecida entre ${creatureA.name} e ${creatureB.name}.`);
+    this.grace?.addPoints(Config.GRACE?.RATES?.CONSTELLATION_WOVEN || 12, 'Constelação Tecida');
   }
 
   /**
@@ -537,6 +551,7 @@ export class World {
     this.particles.emitSanctuaryBloom(x, y, isLight);
     this.audio.playSanctuaryBloom(x / this._width, y / this._height);
     this.diary.add('🌸 Um novo santuário sagrado de pólipos floresceu por semeadura direta.');
+    this.grace?.addPoints(Config.GRACE?.RATES?.SANCTUARY_PLANTED || 25, 'Santuário Germinado');
     return true;
   }
 
@@ -903,7 +918,9 @@ export class World {
   _updateReefs(now, dt) {
     if (!this.reefs || this.reefs.length === 0) return;
     const sporeInterval = Config.SANCTUARIES?.SPORE_INTERVAL_MS || 3800;
-    const regenAmount = Config.SANCTUARIES?.REST_ENERGY_REGEN || 0.00018;
+    const baseRegen = Config.SANCTUARIES?.REST_ENERGY_REGEN || 0.00018;
+    const crystalMult = this.grace?.hasCrystalBreath ? (Config.GRACE?.BLESSINGS?.CRYSTAL_BREATH?.multiplier || 2.5) : 1.0;
+    const regenAmount = baseRegen * crystalMult;
 
     for (const reef of this.reefs) {
       reef.pulsePhase += dt * 0.002;
@@ -983,6 +1000,7 @@ export class World {
     // Diary announcement on season transition
     if (this.season.current !== this.season.lastAnnounced) {
       this.season.lastAnnounced = this.season.current;
+      this.grace?.addPoints(Config.GRACE?.RATES?.SEASON_TRANSITION || 20, 'Transição Estacional');
       switch (this.season.current) {
         case 'crystal_tide':
           this.diary.add('💎 O cosmos adormece sob a Maré de Cristal — o éter torna-se translúcido e sereno.');

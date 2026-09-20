@@ -54,6 +54,24 @@
     </div>
   </div>
 
+  <!-- ── Grace Mandala overlay ──────────────────────────────────── -->
+  <div id="grace-mandala" class="overlay hidden" role="dialog" aria-label="Mandala de Graça">
+    <div class="overlay-inner grace-inner">
+      <div class="overlay-header">
+        <div class="grace-header-title">
+          <h2>Mandala de Graça</h2>
+          <span class="grace-badge">✨ <span id="grace-points">25</span> Graça Cósmica</span>
+        </div>
+        <button id="grace-close" class="close-btn" aria-label="Fechar">×</button>
+      </div>
+      <p class="grace-subtitle">A Graça se acumula através de atos contemplativos de harmonia e presença. Canalize bênçãos cósmicas para nutrir o ecossistema.</p>
+      <div id="grace-blessings" class="scroll-area grace-grid"></div>
+    </div>
+  </div>
+
+  <!-- ── Floating Grace Toast Notification ───────────────────────── -->
+  <div id="grace-toast" class="grace-toast hidden" aria-live="polite"></div>
+
   <!-- ── Inspect Card overlay ───────────────────────────────────── -->
   <div id="inspect-card" class="inspect-container" role="dialog" aria-label="Inspeção de Criatura">
     <div class="inspect-inner">
@@ -104,6 +122,7 @@
       <button id="btn-photo"    class="hud-btn" title="Capturar Wallpaper" aria-label="Capturar Foto">📷</button>
       <button id="btn-diary"    class="hud-btn" title="Diário"    aria-label="Abrir Diário">📖</button>
       <button id="btn-bestiary" class="hud-btn" title="Bestiário" aria-label="Abrir Bestiário">🦋</button>
+      <button id="btn-grace"    class="hud-btn" title="Mandala de Graça (Bênçãos)" aria-label="Abrir Mandala de Graça">🌸</button>
       <button id="btn-install"  class="hud-btn" title="Instalar no Celular" aria-label="Instalar no Celular">📲</button>
     </div>
     <button id="btn-hud-toggle" class="hud-btn hud-toggle" title="Menu" aria-label="Alternar Controles" aria-expanded="false">✦</button>

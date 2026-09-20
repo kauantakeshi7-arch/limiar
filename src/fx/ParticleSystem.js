@@ -373,6 +373,29 @@ export class ParticleSystem {
     });
   }
 
+  /** Radiant golden fountain of motes when a creature is healed or revitalized by Solar Tear. */
+  emitSolarTearMotes(x, y) {
+    const count = 18;
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + Random.float(-0.2, 0.2);
+      const speed = Random.float(0.8, 2.4);
+      this._spawn({
+        x: x + Random.float(-6, 6),
+        y: y + Random.float(-6, 6),
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 0.4,
+        radius: Random.float(2.0, 4.5),
+        h: Random.float(42, 58), // radiant golden amber
+        s: 95,
+        l: 88,
+        a: 0.95,
+        lifespan: Random.float(1200, 2400),
+        fadeStart: 0.5,
+        gravity: -0.0008, // gentle buoyant ascension
+      });
+    }
+  }
+
   // ── Pool management ───────────────────────────────────────────────────────
 
   _spawn(options) {

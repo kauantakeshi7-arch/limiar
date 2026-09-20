@@ -1109,3 +1109,176 @@ body.wallpaper-mode .overlay {
   display: none !important;
 }
 
+/* ── Grace Mandala (Mandala de Graça Cósmica) ────────────────────────── */
+.grace-inner {
+  max-width: 580px;
+}
+
+.grace-header-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.grace-badge {
+  font-size: 0.82rem;
+  font-family: var(--font-ui);
+  color: #fde047;
+  background: rgba(253, 224, 71, 0.12);
+  border: 1px solid rgba(253, 224, 71, 0.35);
+  padding: 3px 10px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  font-weight: 500;
+}
+
+.grace-subtitle {
+  font-size: 0.82rem;
+  color: var(--color-text-dim);
+  font-style: italic;
+  padding: 12px 24px 0;
+  line-height: 1.45;
+}
+
+.grace-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  padding: 16px 24px 24px;
+}
+
+.blessing-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  transition: background var(--transition), border-color var(--transition), transform var(--transition);
+}
+
+.blessing-card:hover {
+  background: rgba(140, 80, 255, 0.08);
+  border-color: rgba(200, 150, 255, 0.4);
+  transform: translateY(-2px);
+}
+
+.blessing-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.blessing-icon {
+  font-size: 1.6rem;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.blessing-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.blessing-name {
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: #ffffff;
+  line-height: 1.25;
+}
+
+.blessing-cost {
+  font-size: 0.78rem;
+  font-family: var(--font-ui);
+  color: #fde047;
+}
+
+.blessing-desc {
+  font-size: 0.80rem;
+  color: var(--color-text-dim);
+  line-height: 1.4;
+  flex: 1;
+}
+
+.blessing-cast-btn {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(253, 224, 71, 0.45);
+  background: rgba(253, 224, 71, 0.15);
+  color: #fef08a;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  touch-action: manipulation;
+}
+
+.blessing-cast-btn:hover:not(:disabled) {
+  background: rgba(253, 224, 71, 0.28);
+  border-color: #fde047;
+  transform: scale(1.02);
+}
+
+.blessing-cast-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.blessing-cast-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--color-text-dim);
+}
+
+.blessing-cast-btn.active-buff {
+  background: rgba(56, 189, 248, 0.22);
+  border-color: #38bdf8;
+  color: #bae6fd;
+  cursor: default;
+}
+
+/* ── Floating Grace Toast ────────────────────────────────────────────── */
+.grace-toast {
+  position: fixed;
+  top: max(20px, env(safe-area-inset-top, 20px));
+  left: 50%;
+  transform: translateX(-50%) translateY(-12px);
+  background: rgba(15, 8, 35, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(253, 224, 71, 0.45);
+  color: #fef08a;
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 7px 18px;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  z-index: 150;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.35s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.grace-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+

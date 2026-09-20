@@ -379,5 +379,58 @@ export const Config = Object.freeze({
     COOLDOWN_MS: 450,              // Interval between wake vortices per creature
   }),
 
+  // ── Meta-Progressão: Graça Contemplativa & Bênçãos Cósmicas ─────────────
+  GRACE: Object.freeze({
+    STORAGE_KEY: 'limiar_grace_v1',
+    MAX_GRACE: 999,
+    INITIAL_GRACE: 25,
+    RATES: Object.freeze({
+      CONSTELLATION_WOVEN: 12,
+      SANCTUARY_PLANTED: 25,
+      SEASON_TRANSITION: 20,
+      SWARM_HARMONY_PER_SEC: 1.5,
+      CREATURE_RESCUED: 15,
+      CONTEMPLATION_PASSIVE: 0.25,
+    }),
+    BLESSINGS: Object.freeze({
+      DEEP_SONG: Object.freeze({
+        id: 'deep_song',
+        name: 'Canto das Profundezas',
+        icon: '🌊',
+        cost: 40,
+        type: 'active',
+        description: 'Emite uma frequência ressonante do abismo que atrai criaturas da Sombra para a superfície e eleva sua serenidade em 45%.'
+      }),
+      CRYSTAL_BREATH: Object.freeze({
+        id: 'crystal_breath',
+        name: 'Sopro de Cristal',
+        icon: '💎',
+        cost: 50,
+        type: 'buff',
+        durationMs: 35000,
+        multiplier: 2.5,
+        description: 'Bênção de fertilidade: todos os recifes e santuários regeneram energia 2.5x mais rápido e acolhem cardumes juvenis.'
+      }),
+      STELLAR_VEIL: Object.freeze({
+        id: 'stellar_veil',
+        name: 'Véu Estelar',
+        icon: '✨',
+        cost: 65,
+        type: 'buff',
+        durationMs: 45000,
+        extendedDurationMs: 15000,
+        description: 'As constelações tecidas duram o dobro do tempo (15s) e protegem criaturas conectadas contra qualquer perda de vitalidade.'
+      }),
+      SOLAR_TEAR: Object.freeze({
+        id: 'solar_tear',
+        name: 'Lágrima Solar',
+        icon: '☀️',
+        cost: 80,
+        type: 'active',
+        description: 'Dádiva suprema da Luz: cura e rejuvenesce criaturas à beira da dissolução, restaurando sua energia e vigor cósmico.'
+      }),
+    }),
+  }),
+
 });
 

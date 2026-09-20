@@ -570,6 +570,129 @@ export class AudioEngine {
     }
   }
 
+  /**
+   * Resonant abyssal whale-like deep ocean frequency call when 'Canto das Profundezas' is cast.
+   * @param {number} [xRatio=0.5]
+   * @param {number} [yRatio=0.8]
+   */
+  playDeepSong(xRatio = 0.5, yRatio = 0.8) {
+    if (!this._initialized || this.isMuted) return;
+    const now = this._ctx.currentTime;
+    const panner = this._makePanner(xRatio);
+    const filter = this._ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 220;
+    filter.Q.value = 3.0;
+
+    const oscSub = this._ctx.createOscillator();
+    const oscFund = this._ctx.createOscillator();
+    const gain = this._makeGain(0.0001);
+
+    oscSub.type = 'sine';
+    oscSub.frequency.setValueAtTime(36.7, now); // D1
+    oscSub.frequency.exponentialRampToValueAtTime(55.0, now + 1.2);
+    oscSub.frequency.exponentialRampToValueAtTime(41.2, now + 3.8);
+
+    oscFund.type = 'triangle';
+    oscFund.frequency.setValueAtTime(73.4, now); // D2
+    oscFund.frequency.exponentialRampToValueAtTime(110.0, now + 1.2);
+    oscFund.frequency.exponentialRampToValueAtTime(82.4, now + 3.8);
+
+    oscSub.connect(gain);
+    oscFund.connect(gain);
+    gain.connect(filter);
+    filter.connect(panner);
+    panner.connect(this._reverb);
+
+    const dur = 4.4;
+    oscSub.start(now);
+    oscFund.start(now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(0.038, now + 0.5);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+
+    oscSub.stop(now + dur + 0.05);
+    oscFund.stop(now + dur + 0.05);
+    this._cleanupOnEnded(oscSub, oscFund, gain, filter, panner);
+  }
+
+  /**
+   * Crystalline cascading chime cascade when 'Sopro de Cristal' blessing is activated.
+   * @param {number} [xRatio=0.5]
+   * @param {number} [yRatio=0.4]
+   */
+  playCrystalBreath(xRatio = 0.5, yRatio = 0.4) {
+    if (!this._initialized || this.isMuted) return;
+    const now = this._ctx.currentTime;
+    const panner = this._makePanner(xRatio);
+    const filter = this._makeDepthFilter(yRatio);
+
+    const notes = [523.25, 659.25, 783.99, 1046.50]; // C-E-G-C pure chime
+    const dur = 3.6;
+
+    for (let i = 0; i < notes.length; i++) {
+      const freq = notes[i];
+      const t = now + i * 0.07;
+      const osc = this._ctx.createOscillator();
+      const gain = this._makeGain(0.0001);
+
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+
+      osc.connect(gain);
+      gain.connect(filter);
+      filter.connect(panner);
+      panner.connect(this._reverb);
+
+      osc.start(t);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(0.024, t + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+      osc.stop(t + dur + 0.05);
+      this._cleanupOnEnded(osc, gain, i === notes.length - 1 ? filter : null, i === notes.length - 1 ? panner : null);
+    }
+  }
+
+  /**
+   * Radiant golden restorative celestial chord when 'Lágrima Solar' is poured.
+   * @param {number} [xRatio=0.5]
+   * @param {number} [yRatio=0.3]
+   */
+  playSolarTear(xRatio = 0.5, yRatio = 0.3) {
+    if (!this._initialized || this.isMuted) return;
+    const now = this._ctx.currentTime;
+    const panner = this._makePanner(xRatio);
+    const filter = this._makeDepthFilter(yRatio);
+
+    const notes = [220.00, 277.18, 329.63, 440.00, 554.37]; // A major 9th warm solar chord
+    const dur = 4.2;
+
+    for (let i = 0; i < notes.length; i++) {
+      const freq = notes[i];
+      const t = now + i * 0.06;
+      const osc = this._ctx.createOscillator();
+      const gain = this._makeGain(0.0001);
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq * 0.98, t);
+      osc.frequency.exponentialRampToValueAtTime(freq, t + 0.3); // microtonal upward portamento
+
+      osc.connect(gain);
+      gain.connect(filter);
+      filter.connect(panner);
+      panner.connect(this._reverb);
+
+      osc.start(t);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(0.022, t + 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+      osc.stop(t + dur + 0.05);
+      this._cleanupOnEnded(osc, gain, i === notes.length - 1 ? filter : null, i === notes.length - 1 ? panner : null);
+    }
+  }
+
   dispose() {
     if (!this._initialized) return;
     if (this._pinkNoiseSource) {

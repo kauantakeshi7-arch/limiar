@@ -1,6 +1,7 @@
 import { World } from '../world/World.js';
 import { Renderer } from '../rendering/Renderer.js';
 import { InspectCard } from '../ui/InspectCard.js';
+import { GraceMandala } from '../ui/GraceMandala.js';
 import { PWAInstaller } from '../ui/PWAInstaller.js';
 import { WakeLock } from '../utils/WakeLock.js';
 import { Config } from './Config.js';
@@ -36,6 +37,7 @@ export class Game {
     this._diaryOpen    = false;
     this._bestiaryOpen = false;
     this._inspectCard  = new InspectCard();
+    this._graceMandala = new GraceMandala(this._world);
     this._pwaInstaller = new PWAInstaller();
     this._wakeLock     = new WakeLock();
     this._timeScale    = 1.0;
@@ -532,8 +534,14 @@ export class Game {
       this._collapseHud();
       this._toggleOverlay('bestiary');
     });
+    document.getElementById('btn-grace')?.addEventListener('click', () => {
+      this._inspectCard?.close();
+      this._collapseHud();
+      this._graceMandala?.toggle();
+    });
     document.getElementById('diary-close')?.addEventListener('click', () => this._closeOverlay('diary'));
     document.getElementById('bestiary-close')?.addEventListener('click', () => this._closeOverlay('bestiary'));
+    document.getElementById('grace-close')?.addEventListener('click', () => this._closeOverlay('grace-mandala'));
 
     // Sound toggle button (Mute / Unmute)
     const btnSound = document.getElementById('btn-sound');
@@ -589,7 +597,7 @@ export class Game {
     });
 
     // Close overlays when tapping the backdrop
-    ['diary', 'bestiary'].forEach(id => {
+    ['diary', 'bestiary', 'grace-mandala'].forEach(id => {
       document.getElementById(id)?.addEventListener('pointerdown', e => {
         if (e.target.id === id) this._closeOverlay(id);
       });
