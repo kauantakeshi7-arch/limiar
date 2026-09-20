@@ -453,10 +453,23 @@ export class PhysicsSystem {
       const dx = other.position.x - px;
       const dy = other.position.y - py;
       const distSq = dx * dx + dy * dy;
-      if (distSq > maxDistSq || distSq < 0.001) continue;
+      if (distSq > maxDistSq) continue;
 
-      const dist = Math.sqrt(distSq);
-      const rB   = other.radius;
+      const rB = other.radius;
+      let dist;
+      let normDx;
+      let normDy;
+
+      if (distSq < 0.001) {
+        // Degenerate overlap: push apart horizontally with deterministic normal
+        normDx = creature.id > other.id ? 1 : -1;
+        normDy = 0;
+        dist = 0.001;
+      } else {
+        dist = Math.sqrt(distSq);
+        normDx = dx / dist;
+        normDy = dy / dist;
+      }
 
       // ── 1. Separation (all creatures, radius-aware) ──────────────────────
       const minComfort = Math.max(baseSepR, (rA + rB) * 1.9);
@@ -464,9 +477,8 @@ export class PhysicsSystem {
         hasCrowdedNeighbour = true;
         const t      = dist / minComfort;
         const repStr = Math.pow(1 - t, 2) * 2.4; // inverse-quadratic, strong near-field
-        const invD   = 1 / dist;
-        sepX -= dx * invD * repStr;               // compounded per neighbour, not averaged
-        sepY -= dy * invD * repStr;
+        sepX -= normDx * repStr;                  // compounded per neighbour, not averaged
+        sepY -= normDy * repStr;
       }
 
       // ── 2. Cohesion & Alignment (same zone only) ─────────────────────────

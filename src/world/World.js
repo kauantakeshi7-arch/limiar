@@ -558,6 +558,7 @@ export class World {
           c.dancePartner.endDance();
           c.dancePartner = null;
         }
+        c.interactionCooldowns.clear();
       }
     }
     this.creatures.length = writeIdx;

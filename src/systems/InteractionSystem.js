@@ -223,6 +223,8 @@ export class InteractionSystem {
     if (a.bondedWith || b.bondedWith || a.isDancing || b.isDancing) return false;
     const aCooldown = a.interactionCooldowns.get(b.id) ?? 0;
     const bCooldown = b.interactionCooldowns.get(a.id) ?? 0;
+    if (aCooldown > 0 && now > aCooldown) a.interactionCooldowns.delete(b.id);
+    if (bCooldown > 0 && now > bCooldown) b.interactionCooldowns.delete(a.id);
     return now > aCooldown && now > bCooldown;
   }
 }

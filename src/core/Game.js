@@ -225,6 +225,15 @@ export class Game {
     // Mobile app lifecycle: pause/resume audio & reset clock when switching tabs or locking phone
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
+        this._activePointers.length = 0;
+        this._holdStartPos = null;
+        if (this._holdTimer) {
+          clearTimeout(this._holdTimer);
+          this._holdTimer = null;
+        }
+        if (this._world?.threshold?.isDragging) {
+          this._world.threshold.endDrag();
+        }
         if (this._world.audio._ctx && this._world.audio._ctx.state === 'running') {
           this._world.audio._ctx.suspend().catch(() => {});
         }
