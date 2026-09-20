@@ -23,6 +23,8 @@ export class Bestiary {
       ['jellyfish',   { label: 'Medusa Abissal',        discovered: false, icon: '🪼', hint: 'Uma forma pulsante com tentáculos de luz.' }],
       ['serpentine',  { label: 'Serpente do Limiar',    discovered: false, icon: '🐉', hint: 'Um ser articulado multi-segmentado.' }],
       ['crystal',     { label: 'Radiolário Sagrado',    discovered: false, icon: '💎', hint: 'Uma geometria viva que refrata prismas.' }],
+      ['phoenix',     { label: 'Fênix Astral',          discovered: false, icon: '🔥', hint: 'Uma ave cósmica de asas de plasma estelar.' }],
+      ['nautilus',    { label: 'Nautilus Áureo',        discovered: false, icon: '🐚', hint: 'Uma concha de Fibonacci navegando no abismo.' }],
       ['lineage',     { label: 'Nova Geração',          discovered: false, icon: '🌱', hint: 'Um filhote nascido da Dança dos Opostos.' }],
       ['legendary',   { label: 'Despertar Mítico',      discovered: false, icon: '🌟', hint: 'Uma mutação lendária despertou na linhagem.' }],
       ['chimera',     { label: 'Quimera Simbiótica',    discovered: false, icon: '☯️', hint: 'Dois seres de anatomias distintas fundiram-se.' }],

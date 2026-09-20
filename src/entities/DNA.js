@@ -81,11 +81,13 @@ export class DNA {
 
   /** Morphological body plan determined by the bodyPlan gene. */
   get bodyPlanType() {
-    if (this.bodyPlan < 0.20) return Config.BODY_PLAN.BLOB;
-    if (this.bodyPlan < 0.40) return Config.BODY_PLAN.MANTA;
-    if (this.bodyPlan < 0.60) return Config.BODY_PLAN.JELLYFISH;
-    if (this.bodyPlan < 0.80) return Config.BODY_PLAN.SERPENTINE;
-    return Config.BODY_PLAN.CRYSTAL;
+    if (this.bodyPlan < 0.15) return Config.BODY_PLAN.BLOB;
+    if (this.bodyPlan < 0.29) return Config.BODY_PLAN.MANTA;
+    if (this.bodyPlan < 0.43) return Config.BODY_PLAN.JELLYFISH;
+    if (this.bodyPlan < 0.57) return Config.BODY_PLAN.SERPENTINE;
+    if (this.bodyPlan < 0.71) return Config.BODY_PLAN.CRYSTAL;
+    if (this.bodyPlan < 0.86) return Config.BODY_PLAN.PHOENIX;
+    return Config.BODY_PLAN.NAUTILUS;
   }
 
   /** Number of articulated vertebrae or node segments. */

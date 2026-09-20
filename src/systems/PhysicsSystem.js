@@ -720,6 +720,18 @@ export class PhysicsSystem {
         const wingSine = Math.sin(creature.wingPhase);
         // Batimento descendente de asas gera micro-impulso de sustentação
         pulseThrust = 0.85 + Math.max(0, wingSine) * 0.40;
+      } else if (creature.bodyPlan === Config.BODY_PLAN.PHOENIX) {
+        const wingSine = Math.sin(creature.wingPhase);
+        // Soaring avian flight: buoyant lift and smooth wing stroke glide
+        pulseThrust = 0.90 + Math.max(0, wingSine) * 0.45;
+      } else if (creature.bodyPlan === Config.BODY_PLAN.NAUTILUS) {
+        // Jet siphon propulsion: intake drift followed by sharp hydrodynamic ejection
+        const jetSine = Math.sin(creature.pulsePhase * 0.8);
+        if (jetSine > 0.4) {
+          pulseThrust = 1.0 + Math.pow((jetSine - 0.4) / 0.6, 2) * 0.65;
+        } else {
+          pulseThrust = 0.60;
+        }
       }
     } else {
       baseSpeed *= 0.22; // serene sleeping drift
@@ -764,6 +776,7 @@ export class PhysicsSystem {
       if (!partner || !partner.isAlive) {
         creature.bondedWith = null;
         creature.isChimera = false;
+        creature.chimericPlan = null;
         creature.transitionTo(creature.zone === creature.originZone ? CreatureState.NATIVE : CreatureState.TRANSFORMED);
         continue;
       }

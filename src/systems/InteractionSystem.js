@@ -114,6 +114,8 @@ export class InteractionSystem {
       if (a.bodyPlan !== b.bodyPlan) {
         a.isChimera = true;
         b.isChimera = true;
+        a.chimericPlan = b.bodyPlan;
+        b.chimericPlan = a.bodyPlan;
       }
       const midX = (a.position.x + b.position.x) / 2;
       const midY = (a.position.y + b.position.y) / 2;

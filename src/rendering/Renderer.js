@@ -1598,6 +1598,12 @@ export class Renderer {
         case Config.BODY_PLAN.CRYSTAL:
           this._drawCrystal(ctx, creature, now, breath);
           break;
+        case Config.BODY_PLAN.PHOENIX:
+          this._drawPhoenix(ctx, creature, now, breath);
+          break;
+        case Config.BODY_PLAN.NAUTILUS:
+          this._drawNautilus(ctx, creature, now, breath);
+          break;
         case Config.BODY_PLAN.BLOB:
         default: {
           const pts = creature.getBlobPoints(now);
@@ -1616,6 +1622,11 @@ export class Renderer {
           }
           break;
         }
+      }
+
+      // Chimeric secondary anatomy (Quimeras 2.0)
+      if (creature.isChimera && creature.chimericPlan) {
+        this._drawChimericFeatures(ctx, creature, now, breath);
       }
 
       // Conscious Sensory Organelles / Gaze
@@ -2107,6 +2118,273 @@ export class Renderer {
     ctx.shadowBlur = this._isMobile ? 0 : 10;
     ctx.fill();
     ctx.shadowBlur = 0;
+
+    ctx.restore();
+  }
+
+  // ── Morphological Plan 5: Phoenix (Fênix Astral) ──────────────────────────
+  _drawPhoenix(ctx, creature, now, breath) {
+    const px = creature.position.x;
+    const py = creature.position.y;
+    const r  = creature.radius;
+    const angle = creature.facingAngle;
+    const wingFlutter = Math.sin(creature.wingPhase) * (r * 0.42);
+
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(angle);
+
+    // 1. Feathered Plasma Wings Path
+    ctx.beginPath();
+    ctx.moveTo(r * 1.35, 0); // Beak / rostrum tip
+    // Left sweeping wing
+    ctx.bezierCurveTo(r * 0.7, -r * 0.5, r * 0.1, -r * 1.6 - wingFlutter, -r * 0.45, -r * 2.1 - wingFlutter);
+    ctx.quadraticCurveTo(-r * 0.65, -r * 1.4 - wingFlutter * 0.7, -r * 0.35, -r * 0.8);
+    ctx.quadraticCurveTo(-r * 0.8, -r * 0.4, -r * 1.1, 0); // To tail root
+    // Right sweeping wing
+    ctx.quadraticCurveTo(-r * 0.8, r * 0.4, -r * 0.35, r * 0.8);
+    ctx.quadraticCurveTo(-r * 0.65, r * 1.4 + wingFlutter * 0.7, -r * 0.45, r * 2.1 + wingFlutter);
+    ctx.bezierCurveTo(r * 0.1, r * 1.6 + wingFlutter, r * 0.7, r * 0.5, r * 1.35, 0);
+    ctx.closePath();
+
+    ctx.fillStyle = this._creatureGradLocal(ctx, creature, r);
+    ctx.fill();
+
+    ctx.strokeStyle = creature.color.toGlowHSLAWithAlpha(0.4, 0.6);
+    ctx.lineWidth = 0.95;
+    ctx.stroke();
+
+    // Avian crest & wing primary feather quills
+    ctx.beginPath();
+    // Head crest feather
+    ctx.moveTo(r * 0.6, 0);
+    ctx.quadraticCurveTo(0, -r * 0.6, -r * 0.4, -r * 0.7);
+    // Left wing primary quill
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-r * 0.45, -r * 2.1 - wingFlutter);
+    // Right wing primary quill
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-r * 0.45, r * 2.1 + wingFlutter);
+    ctx.strokeStyle = creature.color.toGlowHSLAWithAlpha(0.5, 0.35);
+    ctx.lineWidth = 0.75;
+    ctx.stroke();
+
+    // Internal radiant heart flame
+    const pulse = 0.6 + 0.4 * Math.sin(now * 0.006 + (creature.id.charCodeAt(0) || 0));
+    ctx.beginPath();
+    ctx.arc(r * 0.2, 0, r * 0.28 * pulse, 0, Math.PI * 2);
+    ctx.fillStyle = creature.color.toGlowHSLAWithAlpha(0.85, 0.5);
+    ctx.fill();
+
+    ctx.restore();
+
+    // 2. Trailing Tripartite Comet Plume Tail (in world coords using creature.segments)
+    const segs = creature.segments;
+    if (segs && segs.length > 2) {
+      const numSegs = Math.min(segs.length, creature.dna.segmentCount + 2);
+      ctx.save();
+      // Center feather plume
+      ctx.beginPath();
+      ctx.moveTo(segs[0].x, segs[0].y);
+      for (let i = 1; i < numSegs; i++) {
+        ctx.lineTo(segs[i].x, segs[i].y);
+      }
+      ctx.strokeStyle = creature.color.toGlowHSLAWithAlpha(0.5, 0.55);
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // Left & Right trailing feather plumes with sinusoidal wave
+      for (let side = -1; side <= 1; side += 2) {
+        ctx.beginPath();
+        ctx.moveTo(segs[0].x, segs[0].y);
+        for (let i = 1; i < numSegs; i++) {
+          const s = segs[i];
+          const normAngle = s.angle + (Math.PI / 2) * side;
+          const plumeWave = Math.sin(now * 0.004 + i * 0.8) * (r * 0.25);
+          const pxPlume = s.x + Math.cos(normAngle) * (r * 0.35 + plumeWave);
+          const pyPlume = s.y + Math.sin(normAngle) * (r * 0.35 + plumeWave);
+          ctx.lineTo(pxPlume, pyPlume);
+        }
+        ctx.strokeStyle = creature.color.toGlowHSLAWithAlpha(0.35, 0.4);
+        ctx.lineWidth = 0.85;
+        ctx.stroke();
+      }
+
+      // Glowing plume ember at tip
+      const tip = segs[numSegs - 1];
+      ctx.beginPath();
+      ctx.arc(tip.x, tip.y, 2.4, 0, Math.PI * 2);
+      ctx.fillStyle = creature.color.toGlowHSLA(0.9);
+      if (!this._isMobile) {
+        ctx.shadowColor = creature.color.toGlowHSLA(0.9);
+        ctx.shadowBlur = 8;
+      }
+      ctx.fill();
+      if (!this._isMobile) ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+  }
+
+  // ── Morphological Plan 6: Nautilus (Nautilus Áureo) ───────────────────────
+  _drawNautilus(ctx, creature, now, breath) {
+    const px = creature.position.x;
+    const py = creature.position.y;
+    const r  = creature.radius;
+    const angle = creature.facingAngle;
+
+    // 1. Undulating Front Tentacles (in world coords)
+    const tentacles = creature.tentacles;
+    const numT = Math.min(4, creature.dna.tentacleCount);
+    for (let t = 0; t < numT && t < tentacles.length; t++) {
+      const joints = tentacles[t];
+      const maxJ = Math.min(3, joints.length);
+      ctx.beginPath();
+      ctx.moveTo(joints[0].x, joints[0].y);
+      for (let j = 1; j < maxJ; j++) {
+        ctx.lineTo(joints[j].x, joints[j].y);
+      }
+      ctx.strokeStyle = creature.color.toGlowHSLAWithAlpha(0.3, 0.45);
+      ctx.lineWidth = 0.9;
+      ctx.stroke();
+
+      const tip = joints[maxJ - 1];
+      ctx.beginPath();
+      ctx.arc(tip.x, tip.y, 1.4, 0, Math.PI * 2);
+      ctx.fillStyle = creature.color.toGlowHSLA(0.85);
+      ctx.fill();
+    }
+
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(angle);
+
+    // 2. Logarithmic Golden Spiral Shell (Fibonacci Chambers)
+    ctx.beginPath();
+    ctx.moveTo(r * 1.15, -r * 0.3); // Hood crest above aperture
+    ctx.bezierCurveTo(r * 0.8, -r * 1.1, -r * 0.4, -r * 1.35, -r * 1.1, -r * 0.7); // Outer dorsal curve
+    ctx.bezierCurveTo(-r * 1.5, -r * 0.2, -r * 1.3, r * 0.8, -r * 0.6, r * 1.1); // Posterior whorl
+    ctx.quadraticCurveTo(0, r * 1.15, r * 0.6, r * 0.65); // Ventral keel
+    ctx.quadraticCurveTo(r * 1.25, r * 0.35, r * 1.15, -r * 0.3); // Shell aperture margin
+    ctx.closePath();
+
+    ctx.fillStyle = this._creatureGradLocal(ctx, creature, r);
+    ctx.fill();
+
+    ctx.strokeStyle = creature.color.toGlowHSLAWithAlpha(0.4, 0.55);
+    ctx.lineWidth = 1.0;
+    ctx.stroke();
+
+    // Concentric Fibonacci septa chamber arcs
+    const septaCount = 5;
+    for (let s = 1; s <= septaCount; s++) {
+      const frac = s / septaCount;
+      const arcR = r * (0.25 + frac * 0.65);
+      ctx.beginPath();
+      ctx.arc(-r * 0.15, 0, arcR, -Math.PI * 0.65, Math.PI * 0.45);
+      ctx.strokeStyle = creature.color.toGlowHSLAWithAlpha(0.2 + frac * 0.25, 0.3);
+      ctx.lineWidth = 0.65;
+      ctx.stroke();
+    }
+
+    // Central spiral umbilicus eye
+    ctx.beginPath();
+    ctx.arc(-r * 0.15, 0, r * 0.22, 0, Math.PI * 2);
+    ctx.fillStyle = creature.color.toGlowHSLAWithAlpha(0.7, 0.4);
+    ctx.fill();
+
+    // Jet propulsion siphon nozzle (lower aperture)
+    ctx.beginPath();
+    ctx.moveTo(r * 0.6, r * 0.65);
+    ctx.lineTo(r * 0.9, r * 0.9);
+    ctx.lineTo(r * 0.4, r * 0.85);
+    ctx.closePath();
+    ctx.fillStyle = creature.color.toHSLAWithAlpha(0.4);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  // ── Chimeras 2.0: Secondary Anatomical Hallmarks ───────────────────────────
+  _drawChimericFeatures(ctx, creature, now, breath) {
+    const px = creature.position.x;
+    const py = creature.position.y;
+    const r  = creature.radius;
+    const angle = creature.facingAngle;
+    const plan = creature.chimericPlan;
+
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(angle);
+
+    switch (plan) {
+      case Config.BODY_PLAN.MANTA: {
+        // Etheric secondary pectoral wings
+        const flutter = Math.sin(now * 0.005 + (creature.id.charCodeAt(0) || 0)) * (r * 0.25);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.bezierCurveTo(-r * 0.2, -r * 1.2 - flutter, -r * 0.8, -r * 1.4 - flutter, -r * 0.6, 0);
+        ctx.bezierCurveTo(-r * 0.8, r * 1.4 + flutter, -r * 0.2, r * 1.2 + flutter, 0, 0);
+        ctx.fillStyle = creature.color.toGlowHSLAWithAlpha(0.25, 0.2);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 0.8;
+        ctx.fill();
+        ctx.stroke();
+        break;
+      }
+      case Config.BODY_PLAN.CRYSTAL: {
+        // Orbiting prism shards
+        for (let i = 0; i < 3; i++) {
+          const shardAng = (i * Math.PI * 2) / 3 + now * 0.002;
+          const sx = Math.cos(shardAng) * (r * 1.35);
+          const sy = Math.sin(shardAng) * (r * 1.35);
+          ctx.beginPath();
+          ctx.moveTo(sx, sy - 3.5);
+          ctx.lineTo(sx + 3.5, sy);
+          ctx.lineTo(sx, sy + 3.5);
+          ctx.lineTo(sx - 3.5, sy);
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(230, 245, 255, 0.65)';
+          ctx.fill();
+        }
+        break;
+      }
+      case Config.BODY_PLAN.PHOENIX: {
+        // Solar crest flare
+        const flare = Math.sin(now * 0.007) * 2;
+        ctx.beginPath();
+        ctx.moveTo(r * 0.4, 0);
+        ctx.quadraticCurveTo(0, -r * 0.8 - flare, -r * 0.5, -r * 0.9 - flare);
+        ctx.strokeStyle = 'rgba(255, 220, 120, 0.7)';
+        ctx.lineWidth = 1.0;
+        ctx.stroke();
+        break;
+      }
+      case Config.BODY_PLAN.NAUTILUS: {
+        // Small spiral shell emblem on dorsal mantle
+        ctx.beginPath();
+        ctx.arc(-r * 0.35, 0, r * 0.3, 0, Math.PI * 1.5);
+        ctx.strokeStyle = 'rgba(255, 240, 200, 0.55)';
+        ctx.lineWidth = 0.85;
+        ctx.stroke();
+        break;
+      }
+      case Config.BODY_PLAN.SERPENTINE: {
+        // Vertebral dorsal spikes
+        for (let i = -2; i <= 2; i++) {
+          const sx = i * (r * 0.35);
+          ctx.beginPath();
+          ctx.moveTo(sx - 2, 0);
+          ctx.lineTo(sx, -r * 0.45);
+          ctx.lineTo(sx + 2, 0);
+          ctx.strokeStyle = creature.color.toGlowHSLAWithAlpha(0.4, 0.4);
+          ctx.lineWidth = 0.8;
+          ctx.stroke();
+        }
+        break;
+      }
+      default:
+        break;
+    }
 
     ctx.restore();
   }

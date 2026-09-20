@@ -577,10 +577,12 @@ export class World {
           const partner = c.bondedWith;
           partner.bondedWith = null;
           partner.isChimera = false;
+          partner.chimericPlan = null;
           if (partner.state === CreatureState.SYMBIOTIC) {
             partner.transitionTo(partner.zone === partner.originZone ? CreatureState.NATIVE : CreatureState.TRANSFORMED);
           }
           c.bondedWith = null;
+          c.chimericPlan = null;
         }
         if (c.dancePartner) {
           c.dancePartner.endDance();

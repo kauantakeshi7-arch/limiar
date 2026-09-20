@@ -359,6 +359,8 @@ export class DecisionSystem {
       case Config.BODY_PLAN.JELLYFISH:  return 'Medusa Abissal';
       case Config.BODY_PLAN.SERPENTINE: return 'Serpente do Limiar';
       case Config.BODY_PLAN.CRYSTAL:    return 'Radiolário Sagrado';
+      case Config.BODY_PLAN.PHOENIX:    return 'Fênix Astral';
+      case Config.BODY_PLAN.NAUTILUS:   return 'Nautilus Áureo';
       default:                          return 'Blob';
     }
   }

@@ -190,6 +190,7 @@ export class Creature {
     // ── Legendary Mutation & Traits ─────────────────────────────────────────
     this.legendaryTrait = this.dna.legendaryTrait;
     this.isChimera      = false;
+    this.chimericPlan   = null;
 
     // ── Live Expressive Thoughts ────────────────────────────────────────────
     this.customThought = null;
@@ -221,6 +222,8 @@ export class Creature {
       case Config.BODY_PLAN.JELLYFISH:  return 'Medusa Abissal';
       case Config.BODY_PLAN.SERPENTINE: return 'Serpente do Limiar';
       case Config.BODY_PLAN.CRYSTAL:    return 'Radiolário Sagrado';
+      case Config.BODY_PLAN.PHOENIX:    return 'Fênix Astral';
+      case Config.BODY_PLAN.NAUTILUS:   return 'Nautilus Áureo';
       default:                          return 'Ameba Ancestral';
     }
   }
@@ -585,15 +588,15 @@ export class Creature {
     this.wingPhase += dt * this.dna.flutterRate;
     this.pulsePhase += dt * (0.0022 + speed * 0.002);
 
-    // 3. Articulated segments (Verlet chain) for Serpentine & Manta tail
-    if (this.bodyPlan === Config.BODY_PLAN.SERPENTINE || this.bodyPlan === Config.BODY_PLAN.MANTA) {
+    // 3. Articulated segments (Verlet chain) for Serpentine, Manta tail & Phoenix plume
+    if (this.bodyPlan === Config.BODY_PLAN.SERPENTINE || this.bodyPlan === Config.BODY_PLAN.MANTA || this.bodyPlan === Config.BODY_PLAN.PHOENIX) {
       const numSegs = Math.min(this.segments.length, this.dna.segmentCount + 2);
       this.segments[0].x = this.position.x;
       this.segments[0].y = this.position.y;
       this.segments[0].angle = this.facingAngle;
       this.segments[0].radius = this.radius;
 
-      const segSpacing = this.radius * 0.68;
+      const segSpacing = this.radius * (this.bodyPlan === Config.BODY_PLAN.PHOENIX ? 0.55 : 0.68);
       for (let i = 1; i < numSegs; i++) {
         const prev = this.segments[i - 1];
         const curr = this.segments[i];
@@ -608,18 +611,24 @@ export class Creature {
       }
     }
 
-    // 4. Trailing tentacles for Jellyfish
-    if (this.bodyPlan === Config.BODY_PLAN.JELLYFISH) {
-      const numTentacles = this.dna.tentacleCount;
+    // 4. Trailing articulated tentacles for Jellyfish, Nautilus & Jellyfish Chimeras
+    const hasTentacles = this.bodyPlan === Config.BODY_PLAN.JELLYFISH ||
+                         this.bodyPlan === Config.BODY_PLAN.NAUTILUS ||
+                         (this.isChimera && this.chimericPlan === Config.BODY_PLAN.JELLYFISH);
+    if (hasTentacles) {
+      const isNautilus = this.bodyPlan === Config.BODY_PLAN.NAUTILUS;
+      const numTentacles = isNautilus ? Math.min(4, this.dna.tentacleCount) : this.dna.tentacleCount;
       for (let t = 0; t < numTentacles; t++) {
-        const spread = (t / (numTentacles - 1 || 1) - 0.5) * 1.3;
-        const baseAngle = this.facingAngle + Math.PI + spread;
-        let prevX = this.position.x + Math.cos(baseAngle) * this.radius * 0.65;
-        let prevY = this.position.y + Math.sin(baseAngle) * this.radius * 0.65;
+        const spread = (t / (numTentacles - 1 || 1) - 0.5) * (isNautilus ? 0.75 : 1.3);
+        const baseAngle = isNautilus ? (this.facingAngle + spread * 0.5) : (this.facingAngle + Math.PI + spread);
+        const baseOffset = isNautilus ? this.radius * 0.85 : this.radius * 0.65;
+        let prevX = this.position.x + Math.cos(baseAngle) * baseOffset;
+        let prevY = this.position.y + Math.sin(baseAngle) * baseOffset;
         const tent = this.tentacles[t];
 
-        const jointSpacing = this.radius * 0.52;
-        for (let j = 0; j < tent.length; j++) {
+        const jointSpacing = this.radius * (isNautilus ? 0.22 : 0.52);
+        const maxJoints = isNautilus ? Math.min(3, tent.length) : tent.length;
+        for (let j = 0; j < maxJoints; j++) {
           const joint = tent[j];
           const wave = Math.sin(time * 0.0032 + j * 0.7 + joint.phase) * (2.0 + j * 0.8);
           const dx = joint.x - prevX;

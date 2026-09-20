@@ -155,6 +155,8 @@ export const Config = Object.freeze({
     JELLYFISH:  'jellyfish',  // Pulsing bell with trailing articulated tentacles
     SERPENTINE: 'serpentine', // Multi-segment chained body
     CRYSTAL:    'crystal',    // Faceted geometric polyhedron with prism spines
+    PHOENIX:    'phoenix',    // Astral soaring firebird with plasma plumage
+    NAUTILUS:   'nautilus',   // Golden spiral shell with hydrodynamic siphon
   }),
 
   // ── Artificial Intelligence & Drives ──────────────────────────────────────
