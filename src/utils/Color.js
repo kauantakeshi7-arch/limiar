@@ -19,7 +19,7 @@ export class Color {
   // ── Output formats ────────────────────────────────────────────────────────
 
   toHSLA() {
-    return `hsla(${Math.round(this.h)}, ${Math.round(this.s)}%, ${Math.round(this.l)}%, ${this.a < 1 ? this.a.toFixed(3) : 1})`;
+    return `hsla(${Math.round(this.h)}, ${Math.round(this.s)}%, ${Math.round(this.l)}%, ${this.a < 1 ? (this.a <= 0 ? 0 : this.a.toFixed(3)) : 1})`;
   }
 
   toHSLAWithAlpha(a) {
@@ -76,11 +76,12 @@ export class Color {
     if (dh > 180) dh -= 360;
     if (dh < -180) dh += 360;
 
+    const newH = ((this.h + dh * t) % 360 + 360) % 360;
     return new Color(
-      (this.h + dh * t + 360) % 360,
-      this.s + (to.s - this.s) * t,
-      this.l + (to.l - this.l) * t,
-      this.a + (to.a - this.a) * t,
+      newH,
+      Math.max(0, Math.min(100, this.s + (to.s - this.s) * t)),
+      Math.max(0, Math.min(100, this.l + (to.l - this.l) * t)),
+      Math.max(0, Math.min(1, this.a + (to.a - this.a) * t)),
     );
   }
 
@@ -94,10 +95,10 @@ export class Color {
     if (dh > 180) dh -= 360;
     if (dh < -180) dh += 360;
 
-    this.h = (this.h + dh * t + 360) % 360;
-    this.s += (to.s - this.s) * t;
-    this.l += (to.l - this.l) * t;
-    this.a += (to.a - this.a) * t;
+    this.h = ((this.h + dh * t) % 360 + 360) % 360;
+    this.s = Math.max(0, Math.min(100, this.s + (to.s - this.s) * t));
+    this.l = Math.max(0, Math.min(100, this.l + (to.l - this.l) * t));
+    this.a = Math.max(0, Math.min(1, this.a + (to.a - this.a) * t));
     return this;
   }
 

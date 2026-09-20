@@ -127,8 +127,8 @@ export class InteractionSystem {
   }
 
   _resolveOppositeZone(a, b, particles, audio) {
-    const sizeA = a.radius;
-    const sizeB = b.radius;
+    const sizeA = Math.max(1, a.radius);
+    const sizeB = Math.max(1, b.radius);
     const ratio = Math.max(sizeA, sizeB) / Math.min(sizeA, sizeB);
     const midX  = (a.position.x + b.position.x) / 2;
     const midY  = (a.position.y + b.position.y) / 2;
@@ -199,7 +199,7 @@ export class InteractionSystem {
   _buildGrid(creatures) {
     for (const cell of this._grid.values()) {
       cell.length = 0;
-      this._cellPool.push(cell);
+      if (this._cellPool.length < 64) this._cellPool.push(cell);
     }
     this._grid.clear();
 

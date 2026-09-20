@@ -17,6 +17,7 @@ export class GraceMandala {
     this._cardsContainer = typeof document !== 'undefined' ? document.getElementById('grace-blessings') : null;
     this._toastEl = typeof document !== 'undefined' ? document.getElementById('grace-toast') : null;
     this._toastTimer = null;
+    this._toastHideTimer = null;
 
     this._bindEvents();
     this._renderCards();
@@ -72,6 +73,11 @@ export class GraceMandala {
     if (!this._toastEl) return;
     if (this._toastTimer) {
       clearTimeout(this._toastTimer);
+      this._toastTimer = null;
+    }
+    if (this._toastHideTimer) {
+      clearTimeout(this._toastHideTimer);
+      this._toastHideTimer = null;
     }
     this._toastEl.textContent = message;
     this._toastEl.classList.remove('hidden');
@@ -79,8 +85,9 @@ export class GraceMandala {
 
     this._toastTimer = setTimeout(() => {
       this._toastEl?.classList.remove('visible');
-      setTimeout(() => {
+      this._toastHideTimer = setTimeout(() => {
         this._toastEl?.classList.add('hidden');
+        this._toastHideTimer = null;
       }, 400);
       this._toastTimer = null;
     }, 2800);

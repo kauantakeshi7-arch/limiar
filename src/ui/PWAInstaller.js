@@ -6,6 +6,8 @@
 
 export class PWAInstaller {
   constructor() {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
     this._deferredPrompt = window.__pwaPrompt || null;
     this._banner = document.getElementById('pwa-install-banner');
     this._btnBannerInstall = document.getElementById('btn-pwa-install');

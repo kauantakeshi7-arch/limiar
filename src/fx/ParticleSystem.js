@@ -71,8 +71,8 @@ export class Particle {
     this.y  += this.vy * dt * 0.06;
 
     // Fade alpha in the tail portion of life
-    if (this.life < this.fadeStart) {
-      this.alpha = this.life / this.fadeStart;
+    if (this.fadeStart > 0 && this.life < this.fadeStart) {
+      this.alpha = Math.max(0, Math.min(1, this.life / this.fadeStart));
     }
   }
 }

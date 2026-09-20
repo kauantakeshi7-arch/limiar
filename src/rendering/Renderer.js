@@ -219,8 +219,8 @@ export class Renderer {
     return { width: w, height: h };
   }
 
-  get width()  { return this.canvas.width  / this._dpr; }
-  get height() { return this.canvas.height / this._dpr; }
+  get width()  { return this.canvas.width  / (this._dpr || 1); }
+  get height() { return this.canvas.height / (this._dpr || 1); }
 
   // ── Echo registration ─────────────────────────────────────────────────────
 
@@ -230,6 +230,7 @@ export class Renderer {
    * @param {import('../entities/Creature.js').Creature} creature
    */
   registerEcho(creature) {
+    if (!creature || !creature.position || !creature.color) return;
     if (this._echoes.length >= 32) {
       // Overwrite oldest without array re-indexing
       for (let i = 0; i < this._echoes.length - 1; i++) {

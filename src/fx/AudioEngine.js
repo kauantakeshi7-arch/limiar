@@ -46,6 +46,15 @@ export class AudioEngine {
     this._pinkNoiseGain       = null;
     this._lastNoiseFilterUpdate = -1000;
     this._nextStarCrackleTime = 3000 + Math.random() * 4000;
+
+    /** Dynamic canvas dimensions for responsive spatial audio and depth acoustics */
+    this._canvasWidth  = 1200;
+    this._canvasHeight = 800;
+  }
+
+  onResize(width, height) {
+    if (width > 0) this._canvasWidth = width;
+    if (height > 0) this._canvasHeight = height;
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -999,7 +1008,8 @@ export class AudioEngine {
    * @returns {number}
    */
   _computePan(xRatio = 0.5) {
-    const ratio = xRatio > 1.0 ? Math.min(1, Math.max(0, xRatio / 1200)) : Math.min(1, Math.max(0, xRatio));
+    const w = this._canvasWidth || 1200;
+    const ratio = xRatio > 1.0 ? Math.min(1, Math.max(0, xRatio / w)) : Math.min(1, Math.max(0, xRatio));
     return Math.max(-0.88, Math.min(0.88, (ratio - 0.5) * 1.76));
   }
 
@@ -1031,7 +1041,8 @@ export class AudioEngine {
    * @returns {{ freq: number, q: number }}
    */
   _computeDepthAcoustics(yRatio = 0.5) {
-    const y = yRatio > 1.0 ? Math.min(1, Math.max(0, yRatio / 800)) : Math.min(1, Math.max(0, yRatio));
+    const h = this._canvasHeight || 800;
+    const y = yRatio > 1.0 ? Math.min(1, Math.max(0, yRatio / h)) : Math.min(1, Math.max(0, yRatio));
     const s = this._depthAcousticsScratch;
 
     if (y < 0.45) {

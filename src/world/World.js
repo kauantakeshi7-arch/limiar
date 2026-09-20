@@ -326,6 +326,7 @@ export class World {
     this.threshold.onResize(height);
     this._physics.onResize(width, height);
     this._spawn.onResize(width, height);
+    this.audio?.onResize?.(width, height);
     this._layoutReefs(width, height);
     this._layoutVents(width, height);
   }
@@ -795,7 +796,7 @@ export class World {
       const dissolveDelay = c.dna.resistance * 8000 + Config.EVOLUTION.DISSOLVE_DELAY_MS;
       if (now - c.crossingStartTime > dissolveDelay) {
         c.experienceTrauma(0.5);
-        this._evolution.beginDissolution(c);
+        this._evolution.beginDissolution(c, this.particles, this.audio);
       }
     }
   }
@@ -1366,7 +1367,8 @@ export class World {
     globalBus.on(Events.NECTAR_SPAWNED,        ()      => this.diary.add(`🍯 Uma gota de néctar celeste condensou-se no mundo.`));
     globalBus.on(Events.RARE_ECLIPSE,          ()      => this.diary.add(`🌑 O limiar desapareceu. Os mundos se fundiram.`));
     globalBus.on(Events.RARE_ECLIPSE_END,      ()      => this.diary.add(`O limiar retornou. A ordem foi restaurada.`));
-    globalBus.on(Events.RARE_SINGULARITY,      c       => this.diary.add(`${c.name} cresceu infinitamente e desapareceu.`));
+    globalBus.on(Events.RARE_SINGULARITY_START,c       => this.diary.add(`🌀 ${c.name} entrou em colapso gravitacional e começou a expandir.`));
+    globalBus.on(Events.RARE_SINGULARITY,      c       => this.diary.add(`✨ ${c.name} cresceu infinitamente e desapareceu.`));
     globalBus.on(Events.RARE_WITNESS,          c       => this.diary.add(`👁️ ${c.name} parou. Por um momento, olhou para você.`));
     globalBus.on(Events.RARE_CHAIN,            cs      => this.diary.add(`Uma cadeia de ${cs.length} criaturas cruzou o limiar juntas.`));
 

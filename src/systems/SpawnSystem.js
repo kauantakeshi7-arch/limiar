@@ -150,14 +150,15 @@ export class SpawnSystem {
 
     let y;
     const bandPadding = 45;
+    const threshY = threshold?.y ?? (this._height * 0.5);
     if (zone === Config.ZONE.LIGHT) {
       const zoneTop    = margin;
-      const zoneBottom = Math.max(margin + 20, threshold.y - Config.WORLD.THRESHOLD_BAND - bandPadding);
+      const zoneBottom = Math.max(margin + 20, threshY - Config.WORLD.THRESHOLD_BAND - bandPadding);
       const minY = Math.min(zoneTop, zoneBottom);
       const maxY = Math.max(zoneTop, zoneBottom);
       y = Random.float(minY, Math.max(minY + 1, maxY));
     } else {
-      const zoneTop    = Math.min(this._height - margin - 20, threshold.y + Config.WORLD.THRESHOLD_BAND + bandPadding);
+      const zoneTop    = Math.min(this._height - margin - 20, threshY + Config.WORLD.THRESHOLD_BAND + bandPadding);
       const zoneBottom = this._height - margin;
       const minY = Math.min(zoneTop, zoneBottom);
       const maxY = Math.max(zoneTop, zoneBottom);

@@ -72,8 +72,10 @@ export class Diary {
   _saveToStorage() {
     try {
       const toSave = this._entries.slice(0, 20).map(e => ({
-        timestamp: e.timestamp.toISOString(),
-        text: e.text,
+        timestamp: (e.timestamp instanceof Date && !isNaN(e.timestamp.getTime()))
+          ? e.timestamp.toISOString()
+          : new Date().toISOString(),
+        text: e.text || '',
       }));
       localStorage.setItem(Config.STORAGE?.DIARY_KEY || 'limiar_diary_v1', JSON.stringify(toSave));
     } catch (_) {}
@@ -103,8 +105,12 @@ export class Diary {
   }
 
   _formatTime(date) {
-    const h = date.getHours().toString().padStart(2, '0');
-    const m = date.getMinutes().toString().padStart(2, '0');
+    let d = date;
+    if (!(d instanceof Date) || isNaN(d.getTime())) {
+      d = new Date();
+    }
+    const h = d.getHours().toString().padStart(2, '0');
+    const m = d.getMinutes().toString().padStart(2, '0');
     return `${h}:${m}`;
   }
 }

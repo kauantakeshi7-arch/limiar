@@ -53,7 +53,13 @@ export class EventEmitter {
   emit(event, ...args) {
     const handlers = this._listeners.get(event);
     if (!handlers || handlers.size === 0) return;
-    handlers.forEach(handler => handler(...args));
+    handlers.forEach(handler => {
+      try {
+        handler(...args);
+      } catch (err) {
+        console.error(`[EventEmitter] Error handling event "${event}":`, err);
+      }
+    });
   }
 
   /** Remove all listeners for a given event (or all events if omitted). */
@@ -94,6 +100,7 @@ export const Events = Object.freeze({
   // Rare events
   RARE_ECLIPSE:            'rare:eclipse',
   RARE_ECLIPSE_END:        'rare:eclipse:end',
+  RARE_SINGULARITY_START:  'rare:singularity:start',
   RARE_SINGULARITY:        'rare:singularity',
   RARE_WITNESS:            'rare:witness',
   RARE_CHAIN:              'rare:chain',

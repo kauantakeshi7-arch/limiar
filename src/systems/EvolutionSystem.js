@@ -198,10 +198,14 @@ export class EvolutionSystem {
   /**
    * Called by World after the dissolve delay has elapsed for a TRANSFORMED creature.
    */
-  beginDissolution(creature) {
+  beginDissolution(creature, particles = null, audio = null) {
     if (creature.state !== CreatureState.TRANSFORMED) return;
     if (Random.chance(Config.EVOLUTION.TRANSCENDENCE_CHANCE)) {
       creature.transitionTo(CreatureState.TRANSCENDENT);
+      creature.radius = creature.baseRadius * 1.6;
+      particles?.emitTranscendBurst?.(creature.position.x, creature.position.y);
+      audio?.playTranscendence?.(creature.position.x, creature.position.y);
+      globalBus.emit(Events.CREATURE_TRANSCENDED, creature);
       return;
     }
     creature.transitionTo(CreatureState.DISSOLVING);
@@ -273,7 +277,7 @@ export class EvolutionSystem {
     target.singularityGrow = true;
     this._singularityTarget = target;
     this._singularityEnd    = now + Config.RARE.SINGULARITY_DURATION_MS;
-    globalBus.emit(Events.RARE_SINGULARITY, target);
+    globalBus.emit(Events.RARE_SINGULARITY_START, target);
     audio.playTranscendence(target.position.x, target.position.y);
   }
 

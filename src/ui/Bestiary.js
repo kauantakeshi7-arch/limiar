@@ -68,7 +68,7 @@ export class Bestiary {
     this._renderEntry(key, entry, true);
 
     // Mark crossing when a creature transforms
-    if (key === 'transformed' && !this._entries.get('crossing').discovered) {
+    if (key === 'transformed' && !this._entries.get('crossing')?.discovered) {
       this.unlock('crossing', context);
     }
   }

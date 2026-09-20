@@ -340,11 +340,16 @@ export class PhysicsSystem {
         }
 
         // Ancestral & large creatures love basking near warm vents
-        if ((creature.isAncestral || creature.radius > 18) && Math.abs(dx) < attractRadius && dy > 0 && dy < 250) {
+        if ((creature.isAncestral || creature.radius > 18) && dy > 0 && dy < 250) {
           const dist = Math.hypot(dx, dy) || 1;
-          const factor = (1 - dist / attractRadius) * 0.22;
-          ventX -= (dx / dist) * factor;
-          ventY += ((vent.baseY - 70 - py) / dist) * factor;
+          if (dist < attractRadius) {
+            const factor = (1 - dist / attractRadius) * 0.22;
+            const targetY = vent.baseY - 70;
+            const targetDy = targetY - py;
+            const targetDist = Math.hypot(dx, targetDy) || 1;
+            ventX -= (dx / dist) * factor;
+            ventY += (targetDy / targetDist) * factor;
+          }
         }
       }
     }

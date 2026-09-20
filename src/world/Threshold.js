@@ -75,7 +75,10 @@ export class Threshold {
 
   /** Resize — recalculate absolute Y when the canvas is resized. */
   onResize(newHeight) {
-    const ratio = this._currentY / this._canvasHeight;
+    if (typeof newHeight !== 'number' || newHeight <= 0 || isNaN(newHeight)) return;
+    const ratio = (this._canvasHeight > 0 && typeof this._currentY === 'number' && !isNaN(this._currentY))
+      ? (this._currentY / this._canvasHeight)
+      : (Config.WORLD.THRESHOLD_INITIAL_RATIO || 0.5);
     this._canvasHeight = newHeight;
     this._currentY = ratio * newHeight;
     this._targetY  = ratio * newHeight;
