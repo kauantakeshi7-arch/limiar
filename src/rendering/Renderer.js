@@ -299,6 +299,7 @@ export class Renderer {
     vents = [],
     aurora = null,
     season = null,
+    vortices = [],
     now,
     dt = 16
   }) {
@@ -374,6 +375,9 @@ export class Renderer {
         this._drawEtherStreams(ctx, etherStreams, now);
       }
 
+      // 3.9. Underwater Caustics & Shimmering Rays (Luz e Sombra)
+      this._drawUnderwaterCaustics(ctx, w, h, ty, now, breath, season, diurnalFactor);
+
       // 5. Ambient floating particles (nudged by wind + weather spawns + creature grazing)
       this._updateAmbient(dt, w, h, ty, wind, sunburst, voidPulse, creatures);
       this._drawAmbient(ctx);
@@ -419,8 +423,16 @@ export class Renderer {
       // 10.9. Celestial Nectar
       this._drawNectar(ctx, activeNectar, now);
 
+      // 10.95. Creature Depth Shadows & Seafloor Silhouettes
+      this._drawCreatureShadows(ctx, creatures, ty, h, now);
+
       // 11. Creatures
       this._drawCreatures(ctx, creatures, now, breath, dt);
+
+      // 11.2. Refractive Fluid Vortices & Wake Lenses
+      if (vortices && vortices.length > 0) {
+        this._drawRefractiveVortices(ctx, vortices, now);
+      }
 
       // 11.5. Inspected creature indicator
       if (inspectedCreature && inspectedCreature.isAlive) {
@@ -1053,10 +1065,12 @@ export class Renderer {
       const d = dustList[i];
       if (d.life <= 0) continue;
       const alpha = d.life * 0.75;
-      const pulse = 0.6 + 0.4 * Math.sin(now * 0.006 + d.seed);
+      const seed = Number.isFinite(d.seed) ? d.seed : 0;
+      const radius = Number.isFinite(d.radius) ? d.radius : (Number.isFinite(d.size) ? d.size : 1.5);
+      const pulse = 0.6 + 0.4 * Math.sin(now * 0.006 + seed);
 
       ctx.beginPath();
-      ctx.arc(d.x, d.y, d.radius * pulse, 0, Math.PI * 2);
+      ctx.arc(d.x, d.y, Math.max(0.1, radius * pulse), 0, Math.PI * 2);
       ctx.fillStyle = `rgba(240, 248, 255, ${alpha * pulse})`;
       ctx.shadowColor = 'rgba(226, 232, 240, 0.9)';
       ctx.shadowBlur = this._isMobile ? 0 : 6;
@@ -3337,6 +3351,216 @@ export class Renderer {
         if (!this._isMobile) ctx.shadowBlur = 0;
       }
     }
+    ctx.restore();
+  }
+
+  // ── Phase 4: Next-Gen Optics & Underwater Lighting ────────────────────────
+
+  /**
+   * Organic underwater caustics: shimmering sunlight refractive network in Light realm,
+   * and deep bioluminescent harmonic light ribbons in Shadow realm.
+   * Zero-allocation hot path with strict mobile shadowBlur bypass.
+   */
+  _drawUnderwaterCaustics(ctx, w, h, ty, now, breath, season, diurnalFactor) {
+    if (w <= 0 || h <= 0) return;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const isMobile = this._isMobile;
+
+    const seasonType = season?.current || 'crystal_tide';
+
+    // ── 1. Solar Light Realm Caustic Mesh (y < ty) ──────────────────────────
+    if (ty > 25) {
+      let strokeR = 210, strokeG = 245, strokeB = 255; // crystal_tide (quartz cyan)
+      if (seasonType === 'boreal_night') {
+        strokeR = 175; strokeG = 255; strokeB = 235; // boreal_night (mint aurora)
+      } else if (seasonType === 'golden_eclipse') {
+        strokeR = 255; strokeG = 230; strokeB = 180; // golden_eclipse (amber solar)
+      }
+
+      const lightAlpha = (Config.OPTICS?.CAUSTICS_ALPHA_LIGHT || 0.08) * (0.65 + diurnalFactor * 0.35);
+      const strokeStyle = `rgba(${strokeR}, ${strokeG}, ${strokeB}, ${lightAlpha.toFixed(3)})`;
+      ctx.strokeStyle = strokeStyle;
+      ctx.lineWidth = isMobile ? 2.0 : 3.0;
+
+      if (!isMobile) {
+        ctx.shadowColor = `rgba(${strokeR}, ${strokeG}, ${strokeB}, 0.5)`;
+        ctx.shadowBlur = 4;
+      } else {
+        ctx.shadowBlur = 0;
+      }
+
+      const bands = isMobile ? 3 : 5;
+      const stepX = isMobile ? 110 : 65;
+
+      for (let b = 0; b < bands; b++) {
+        const bandRatio = (b + 0.5) / bands;
+        const baseY = ty * bandRatio * 0.92;
+        const speed = now * 0.00095;
+        const phaseOffset = b * 1.6;
+
+        ctx.beginPath();
+        const startY = baseY + Math.sin(speed + phaseOffset) * (isMobile ? 8 : 14);
+        ctx.moveTo(0, startY);
+
+        for (let x = stepX; x <= w + stepX; x += stepX) {
+          const wave1 = Math.sin(x * 0.011 + speed * 1.1 + phaseOffset);
+          const wave2 = Math.cos(x * 0.019 - speed * 0.8 + b * 2.1);
+          const cy = baseY + (wave1 + wave2) * (isMobile ? 10 : 16);
+          ctx.lineTo(x, cy);
+        }
+        ctx.stroke();
+      }
+    }
+
+    // ── 2. Abyssal Shadow Realm Caustic Ribbons (y > ty) ───────────────────
+    const shadowHeight = h - ty;
+    if (shadowHeight > 40) {
+      let abyssalR = 75, abyssalG = 185, abyssalB = 230;
+      if (seasonType === 'boreal_night') {
+        abyssalR = 90; abyssalG = 255; abyssalB = 195;
+      } else if (seasonType === 'golden_eclipse') {
+        abyssalR = 190; abyssalG = 160; abyssalB = 255; // twilight violet
+      }
+
+      const shadowAlpha = Config.OPTICS?.CAUSTICS_ALPHA_SHADOW || 0.045;
+      ctx.strokeStyle = `rgba(${abyssalR}, ${abyssalG}, ${abyssalB}, ${shadowAlpha.toFixed(3)})`;
+      ctx.lineWidth = isMobile ? 2.5 : 4.0;
+
+      if (!isMobile) {
+        ctx.shadowColor = `rgba(${abyssalR}, ${abyssalG}, ${abyssalB}, 0.4)`;
+        ctx.shadowBlur = 6;
+      } else {
+        ctx.shadowBlur = 0;
+      }
+
+      const deepBands = isMobile ? 2 : 3;
+      const deepStepX = isMobile ? 140 : 90;
+
+      for (let b = 0; b < deepBands; b++) {
+        const bandRatio = (b + 0.3) / deepBands;
+        const baseY = ty + 30 + shadowHeight * bandRatio * 0.85;
+        const deepSpeed = now * 0.00042;
+        const deepPhase = b * 2.3;
+
+        ctx.beginPath();
+        const startY = baseY + Math.sin(deepSpeed + deepPhase) * (isMobile ? 10 : 18);
+        ctx.moveTo(0, startY);
+
+        for (let x = deepStepX; x <= w + deepStepX; x += deepStepX) {
+          const wave = Math.sin(x * 0.0075 + deepSpeed + deepPhase) * Math.cos(x * 0.0035 - deepSpeed * 0.5);
+          const cy = baseY + wave * (isMobile ? 14 : 22);
+          ctx.lineTo(x, cy);
+        }
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Casts soft underwater depth shadows and seafloor silhouettes beneath living creatures.
+   * Foreshortened perspective projection with zero memory allocation.
+   */
+  _drawCreatureShadows(ctx, creatures, ty, h, now) {
+    if (!creatures || creatures.length === 0) return;
+
+    ctx.save();
+    const isMobile = this._isMobile;
+    const baseOffset = Config.OPTICS?.SHADOW_OFFSET_BASE || 16;
+    const compression = Config.OPTICS?.SHADOW_COMPRESSION_Y || 0.36;
+
+    if (!isMobile) {
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+      ctx.shadowBlur = Config.OPTICS?.SHADOW_BLUR_DESKTOP || 6;
+    } else {
+      ctx.shadowBlur = 0;
+    }
+
+    for (let i = 0; i < creatures.length; i++) {
+      const c = creatures[i];
+      if (!c.isAlive) continue;
+      if (c.state === CreatureState.DISSOLVING && c.dissolveTimer > 2000) continue;
+
+      const alt = Math.min(42, Math.max(10, c.radius * 0.75));
+      const sx = c.position.x + (c.velocity?.x || 0) * 2.0;
+      const sy = Math.min(h - 4, c.position.y + baseOffset + alt * 0.5);
+
+      let rx = Math.max(1, c.radius * (1.05 + Math.sin(now * 0.0018 + (c.dna?.rhythm || 0)) * 0.05));
+      let ry = Math.max(1, rx * compression);
+      if (c.isAncestral) {
+        rx *= 1.35;
+        ry *= 1.35;
+      }
+
+      // Depth-aware ambient occlusion color
+      if (c.position.y < ty) {
+        // Light realm: soft azure aquatic shadow
+        const alpha = 0.08 * (1.0 - (c.transparency || 0) * 0.5);
+        ctx.fillStyle = `rgba(15, 38, 58, ${alpha.toFixed(3)})`;
+      } else {
+        // Shadow realm: dense abyssal silhouette
+        const depth = (c.position.y - ty) / Math.max(1, h - ty);
+        const alpha = (0.11 + depth * 0.07) * (1.0 - (c.transparency || 0) * 0.5);
+        ctx.fillStyle = `rgba(3, 8, 20, ${alpha.toFixed(3)})`;
+      }
+
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, rx, ry, c.heading || 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Renders localized refractive fluid wake vortices and micro-lenses in the water stratum.
+   * Concentric expanding ripple rings with subtle chromatic separation.
+   */
+  _drawRefractiveVortices(ctx, vortices, now) {
+    if (!vortices || vortices.length === 0) return;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const isMobile = this._isMobile;
+
+    if (!isMobile) {
+      ctx.shadowColor = 'rgba(120, 220, 255, 0.4)';
+      ctx.shadowBlur = 6;
+    } else {
+      ctx.shadowBlur = 0;
+    }
+
+    for (let i = 0; i < vortices.length; i++) {
+      const v = vortices[i];
+      const progress = v.age / v.lifespan;
+      if (progress >= 1.0) continue;
+
+      const fade = Math.sin(progress * Math.PI);
+      const alpha = fade * 0.28 * (v.strength || 1.0);
+      if (alpha < 0.006) continue;
+
+      const spin = (v.x % 2 === 0 ? 1 : -1) * (now * 0.0018);
+      const rInner = Math.max(1, v.radius * 0.82);
+      const rOuter = Math.max(1, v.radius);
+
+      // Inner refractive arc (crystalline white-cyan)
+      ctx.strokeStyle = `rgba(235, 250, 255, ${(alpha * 0.85).toFixed(3)})`;
+      ctx.lineWidth = isMobile ? 1.5 : 2.2;
+      ctx.beginPath();
+      ctx.arc(v.x, v.y, rInner, spin, spin + Math.PI * 1.5);
+      ctx.stroke();
+
+      // Outer refraction envelope (fluid aquamarine)
+      ctx.strokeStyle = `rgba(90, 200, 240, ${(alpha * 0.50).toFixed(3)})`;
+      ctx.lineWidth = isMobile ? 1.0 : 1.6;
+      ctx.beginPath();
+      ctx.arc(v.x, v.y, rOuter, spin + 0.45, spin + 0.45 + Math.PI * 1.4);
+      ctx.stroke();
+    }
+
     ctx.restore();
   }
 }

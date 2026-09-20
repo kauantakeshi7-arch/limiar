@@ -96,6 +96,9 @@ export class World {
     /** Ephemeral starlight constellation bonds between creatures. */
     this.constellations = [];
 
+    /** Refractive fluid vortices spawned by creature wake turbulence and player touches. */
+    this.vortices = [];
+
     // ── Sanctuaries & Micro-Climates (Jardins de Pólipos) ─────────────────
     this.reefs = [
       {
@@ -277,6 +280,7 @@ export class World {
     this._updateAuroraNursery(now, dt);
     this._updateEtherStreams(now, dt);
     this._updateConstellations(now, dt);
+    this._updateVortices(now, dt);
 
     // 5. Physics: steering, movement, sleep damping, dance, nectar pull, thermocline convection, tide, reefs, vents, aurora & ether winds
     this._physics.update(this.creatures, this.threshold, dt, this.wind, touchPoints, this.activeNectar, now, this.tide, this.reefs, this.vents, this.season, this.etherStreams);
@@ -1114,7 +1118,9 @@ export class World {
             vy: -0.04 - Math.random() * 0.04,
             alpha: 0.85 * c.auroraShimmer,
             life: 1.0,
+            radius: 1.2 + Math.random() * 1.6,
             size: 1.2 + Math.random() * 1.6,
+            seed: Math.random() * Math.PI * 2,
           });
         }
       }
@@ -1173,6 +1179,70 @@ export class World {
         const sx = c.creatureA.position.x + (c.creatureB.position.x - c.creatureA.position.x) * t;
         const sy = c.creatureA.position.y + (c.creatureB.position.y - c.creatureA.position.y) * t;
         this.particles.emitConstellationSpark(sx, sy, c.creatureA.color);
+      }
+    }
+  }
+
+  /**
+   * Spawn a localized refractive fluid vortex in the water stratum.
+   * @param {number} x
+   * @param {number} y
+   * @param {number} [strength=1.0]
+   * @param {number} [radius=8]
+   */
+  spawnVortex(x, y, strength = 1.0, radius = 8) {
+    const maxVortices = Config.VORTICES?.MAX_VORTICES || 8;
+    if (this.vortices.length >= maxVortices) {
+      this.vortices.shift();
+    }
+    const maxRadius = (Config.VORTICES?.MAX_RADIUS || 46) * Math.max(0.6, Math.min(1.5, strength));
+    const lifespan = Config.VORTICES?.DURATION_MS || 1600;
+    this.vortices.push({
+      x,
+      y,
+      radius,
+      maxRadius,
+      age: 0,
+      lifespan,
+      strength: Math.max(0.4, Math.min(1.5, strength)),
+    });
+  }
+
+  _updateVortices(now, dt) {
+    const triggerSpeed = Config.VORTICES?.SPEED_TRIGGER || 0.70;
+    const cooldown = Config.VORTICES?.COOLDOWN_MS || 450;
+
+    // 1. Automatic wake vortex generation behind fast creatures
+    for (let i = 0; i < this.creatures.length; i++) {
+      const c = this.creatures[i];
+      if (!c.isAlive) continue;
+
+      if (c.vortexTimer > 0) {
+        c.vortexTimer -= dt;
+      }
+
+      const spd = Math.hypot(c.velocity.x, c.velocity.y);
+      if (spd >= triggerSpeed && c.vortexTimer <= 0) {
+        c.vortexTimer = cooldown;
+        const normVx = c.velocity.x / spd;
+        const normVy = c.velocity.y / spd;
+        const wakeX = c.position.x - normVx * (c.radius * 0.9);
+        const wakeY = c.position.y - normVy * (c.radius * 0.9);
+        this.spawnVortex(wakeX, wakeY, spd * 1.1, c.radius * 0.4);
+      }
+    }
+
+    // 2. Advance existing vortices & purge expired with swap-and-pop
+    for (let i = this.vortices.length - 1; i >= 0; i--) {
+      const v = this.vortices[i];
+      v.age += dt;
+      if (v.age >= v.lifespan) {
+        const last = this.vortices.pop();
+        if (i < this.vortices.length) {
+          this.vortices[i] = last;
+        }
+      } else {
+        v.radius += (v.maxRadius - v.radius) * 0.05;
       }
     }
   }

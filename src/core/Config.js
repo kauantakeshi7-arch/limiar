@@ -361,5 +361,23 @@ export const Config = Object.freeze({
     }),
   }),
 
+  // ── Next-Gen Optics & Underwater Lighting ─────────────────────────────────
+  OPTICS: Object.freeze({
+    CAUSTICS_ALPHA_LIGHT: 0.08,    // Sunlight caustic intensity in Light realm
+    CAUSTICS_ALPHA_SHADOW: 0.045,  // Bioluminescent caustic intensity in Shadow
+    SHADOW_OFFSET_BASE: 16,        // Vertical offset of creature depth shadows
+    SHADOW_COMPRESSION_Y: 0.36,    // Foreshortening aspect ratio for shadows
+    SHADOW_BLUR_DESKTOP: 6,        // Soft blur on desktop only (0 on mobile)
+  }),
+
+  // ── Fluid Vortices & Refraction ───────────────────────────────────────────
+  VORTICES: Object.freeze({
+    MAX_VORTICES: 8,               // Max concurrent refractive fluid vortices
+    DURATION_MS: 1600,             // Vortex lifespan (ms)
+    MAX_RADIUS: 46,                // Maximum refractive expansion radius
+    SPEED_TRIGGER: 0.70,           // Creature speed threshold to spawn wake vortex
+    COOLDOWN_MS: 450,              // Interval between wake vortices per creature
+  }),
+
 });
 

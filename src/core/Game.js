@@ -81,6 +81,7 @@ export class Game {
       vents:             null,
       aurora:            null,
       season:            null,
+      vortices:          null,
       now:               0,
       dt:                0,
     };
@@ -232,6 +233,7 @@ export class Game {
       ro.vents             = this._world.vents;
       ro.aurora            = this._world.aurora;
       ro.season            = this._world.season;
+      ro.vortices          = this._world.vortices;
       ro.now               = timestamp;
       ro.dt                = dt;
 

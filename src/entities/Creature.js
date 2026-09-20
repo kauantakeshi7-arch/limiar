@@ -118,6 +118,8 @@ export class Creature {
     this.auroraTrailTimer  = 0;
     /** Intensity [0..1] of thermal basking warmth from Abyssal Hydrothermal Vents. */
     this.ventBasking       = 0;
+    /** Cooldown timer (ms) before spawning another fluid wake vortex. */
+    this.vortexTimer       = 0;
 
     // ── Metabolism ──────────────────────────────────────────────────────────
     /** Visual pulse [0..1] triggered when consuming ambient motes. */
