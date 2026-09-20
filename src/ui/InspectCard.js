@@ -6,7 +6,7 @@
  */
 export class InspectCard {
   constructor() {
-    this._container = document.getElementById('inspect-card');
+    this._container = typeof document !== 'undefined' ? document.getElementById('inspect-card') : null;
     this._currentCreature = null;
     this._isOpen = false;
     this._lastUpdate = 0;

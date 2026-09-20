@@ -53,9 +53,10 @@ export class SpawnSystem {
     // Check if either zone is critically under-represented
     const lightUnder  = lightCount < minPerZone;
     const shadowUnder = shadowCount < minPerZone;
+    const isExtinct   = lightCount === 0 && shadowCount === 0;
 
-    // Gentle replenishing without rushing
-    const interval = (lightUnder || shadowUnder) ? 4000 : (isMobile ? 12000 : Config.SPAWN.INTERVAL_MS);
+    // Gentle replenishing without rushing, or instant emergency resurrection on total extinction
+    const interval = isExtinct ? 0 : ((lightUnder || shadowUnder) ? 4000 : (isMobile ? 12000 : Config.SPAWN.INTERVAL_MS));
     const elapsed  = now - this._lastSpawnTime;
     if (elapsed < interval) return [];
 

@@ -30,7 +30,7 @@ export class Bestiary {
       ['chimera',     { label: 'Quimera Simbiótica',    discovered: false, icon: '☯️', hint: 'Dois seres de anatomias distintas fundiram-se.' }],
     ]);
 
-    this._element = document.getElementById('bestiary-entries');
+    this._element = typeof document !== 'undefined' ? document.getElementById('bestiary-entries') : null;
     this._loadFromStorage();
     this._renderAll();
   }

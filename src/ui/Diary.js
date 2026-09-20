@@ -8,7 +8,7 @@ export class Diary {
   constructor() {
     /** @type {{ timestamp: Date, text: string }[]} */
     this._entries = [];
-    this._element = document.getElementById('diary-entries');
+    this._element = typeof document !== 'undefined' ? document.getElementById('diary-entries') : null;
     this._saveTimer = null;
     this._loadFromStorage();
   }

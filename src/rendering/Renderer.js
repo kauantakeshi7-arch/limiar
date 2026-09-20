@@ -160,7 +160,8 @@ export class Renderer {
     // Mobile DPR optimized at 1.5 (Retina crisp, 0% stutter, saves >44% GPU fill rate)
     const isMobile = typeof window !== 'undefined' && window.innerWidth <= 600;
     this._isMobile = isMobile;
-    this._dpr   = isMobile ? Math.min(window.devicePixelRatio || 1, 1.5) : Math.min(window.devicePixelRatio || 1, 2.0);
+    const rawDpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
+    this._dpr   = isMobile ? Math.min(rawDpr, 1.5) : Math.min(rawDpr, 2.0);
     this._time  = 0;
 
     // ── Seeded static scene elements ──────────────────────────────────────
@@ -281,7 +282,7 @@ export class Renderer {
    * @param {number} state.dt
    */
   render({
-    creatures,
+    creatures = [],
     threshold,
     particles,
     ripples = [],
@@ -300,7 +301,7 @@ export class Renderer {
     aurora = null,
     season = null,
     vortices = [],
-    now,
+    now = (typeof performance !== 'undefined' ? performance.now() : Date.now()),
     dt = 16
   }) {
     try {
@@ -310,8 +311,8 @@ export class Renderer {
       const h    = this.height;
       if (w <= 0 || h <= 0) return;
 
-      const ty   = threshold.y;
-      const ea   = threshold.eclipseAlpha;
+      const ty   = threshold ? (threshold.y ?? h * 0.5) : (h * 0.5);
+      const ea   = threshold ? (threshold.eclipseAlpha ?? 0) : 0;
 
       // ── Respiration of the World ──────────────────────────────────────────
       // Continuous 8.5s sinusoidal breathing cycle
@@ -3508,7 +3509,7 @@ export class Renderer {
       }
 
       ctx.beginPath();
-      ctx.ellipse(sx, sy, rx, ry, c.heading || 0, 0, Math.PI * 2);
+      ctx.ellipse(sx, sy, rx, ry, c.facingAngle || 0, 0, Math.PI * 2);
       ctx.fill();
     }
 

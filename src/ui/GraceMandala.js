@@ -12,10 +12,10 @@ export class GraceMandala {
    */
   constructor(world) {
     this._world = world;
-    this._overlay = document.getElementById('grace-mandala');
-    this._pointsEl = document.getElementById('grace-points');
-    this._cardsContainer = document.getElementById('grace-blessings');
-    this._toastEl = document.getElementById('grace-toast');
+    this._overlay = typeof document !== 'undefined' ? document.getElementById('grace-mandala') : null;
+    this._pointsEl = typeof document !== 'undefined' ? document.getElementById('grace-points') : null;
+    this._cardsContainer = typeof document !== 'undefined' ? document.getElementById('grace-blessings') : null;
+    this._toastEl = typeof document !== 'undefined' ? document.getElementById('grace-toast') : null;
     this._toastTimer = null;
 
     this._bindEvents();
@@ -89,7 +89,7 @@ export class GraceMandala {
   // ── Private ───────────────────────────────────────────────────────────────
 
   _bindEvents() {
-    const closeBtn = document.getElementById('grace-close');
+    const closeBtn = typeof document !== 'undefined' ? document.getElementById('grace-close') : null;
     closeBtn?.addEventListener?.('click', () => this.close());
   }
 

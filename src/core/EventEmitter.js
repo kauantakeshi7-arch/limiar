@@ -103,6 +103,8 @@ export const Events = Object.freeze({
   WHISPER:                 'player:whisper',
   BUBBLE:                  'player:bubble',
   NECTAR_SPAWNED:          'player:nectar',
+  COSMIC_TIDE_START:       'world:tide:start',
+  COSMIC_TIDE_END:         'world:tide:end',
 
   // Consciousness & AI
   CREATURE_INQUISITIVE:    'creature:inquisitive',
