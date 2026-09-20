@@ -292,6 +292,87 @@ export class ParticleSystem {
     });
   }
 
+  /** Inward converging spiral motes while holding to seed a sanctuary reef. */
+  emitSanctuaryGathering(x, y, progress = 0.5) {
+    const angle = Random.float(0, Math.PI * 2);
+    const dist = Random.float(30, 60) * (1 - progress * 0.4);
+    const sx = x + Math.cos(angle) * dist;
+    const sy = y + Math.sin(angle) * dist;
+    const tangent = angle + Math.PI / 2;
+    const speed = 0.5 + progress * 0.8;
+    this._spawn({
+      x: sx, y: sy,
+      vx: -Math.cos(angle) * speed + Math.cos(tangent) * 0.35,
+      vy: -Math.sin(angle) * speed + Math.sin(tangent) * 0.35,
+      radius: Random.float(1.5, 3.2),
+      h: Random.float(170, 220),
+      s: 85,
+      l: 80,
+      a: 0.75 + progress * 0.25,
+      lifespan: Random.float(500, 900),
+      fadeStart: 0.5,
+    });
+  }
+
+  /** Crystalline radial blossom burst when a sanctuary reef is planted. */
+  emitSanctuaryBloom(x, y, isLight = false) {
+    const count = 24;
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + Random.float(-0.15, 0.15);
+      const speed = Random.float(1.2, 3.2);
+      this._spawn({
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        radius: Random.float(2.2, 5.0),
+        h: isLight ? Random.float(40, 70) : Random.float(260, 310),
+        s: 90,
+        l: 85,
+        a: 0.95,
+        lifespan: Random.float(1400, 2600),
+        fadeStart: 0.6,
+        gravity: (isLight ? 1 : -1) * 0.0012,
+      });
+    }
+  }
+
+  /** Stellar diamond glint along an ephemeral constellation filament. */
+  emitConstellationSpark(x, y, color = null) {
+    const angle = Random.float(0, Math.PI * 2);
+    const speed = Random.float(0.15, 0.6);
+    this._spawn({
+      x: x + Random.float(-4, 4),
+      y: y + Random.float(-4, 4),
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      radius: Random.float(1.4, 2.8),
+      h: color ? color.h : Random.float(180, 220),
+      s: color ? color.s : 85,
+      l: 92,
+      a: 0.9,
+      lifespan: Random.float(800, 1600),
+      fadeStart: 0.5,
+      gravity: -0.0004,
+    });
+  }
+
+  /** Luminous fluid stardust drifting along an ether wind streamline. */
+  emitEtherMote(x, y, vx, vy) {
+    this._spawn({
+      x: x + Random.float(-8, 8),
+      y: y + Random.float(-8, 8),
+      vx: vx * 0.85 + Random.float(-0.1, 0.1),
+      vy: vy * 0.85 + Random.float(-0.1, 0.1),
+      radius: Random.float(1.2, 2.6),
+      h: Random.float(175, 215),
+      s: 80,
+      l: 88,
+      a: 0.75,
+      lifespan: Random.float(1200, 2200),
+      fadeStart: 0.5,
+    });
+  }
+
   // ── Pool management ───────────────────────────────────────────────────────
 
   _spawn(options) {

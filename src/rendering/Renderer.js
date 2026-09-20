@@ -290,6 +290,8 @@ export class Renderer {
     activeSpores = [],
     playerCalls = [],
     inspectedCreature = null,
+    etherStreams = [],
+    constellations = [],
     diurnalFactor = 0.5,
     diurnalCycle = 0,
     reefs = [],
@@ -367,6 +369,11 @@ export class Renderer {
         this._drawCosmicTide(ctx, w, h, tide, now);
       }
 
+      // 3.8. Ether Winds (Ventos de Éter streamlines)
+      if (etherStreams && etherStreams.length > 0) {
+        this._drawEtherStreams(ctx, etherStreams, now);
+      }
+
       // 5. Ambient floating particles (nudged by wind + weather spawns + creature grazing)
       this._updateAmbient(dt, w, h, ty, wind, sunburst, voidPulse, creatures);
       this._drawAmbient(ctx);
@@ -384,6 +391,11 @@ export class Renderer {
 
       // 6.5. Cross-zone harmonic threads & symbiotic links
       this._drawConnectionThreads(ctx, creatures);
+
+      // 6.8. Ephemeral Constellations (Fiação de Constelações)
+      if (constellations && constellations.length > 0) {
+        this._drawConstellations(ctx, constellations, now);
+      }
 
       // 8. Dissolution echoes
       this._updateEchoes(dt);
@@ -824,6 +836,71 @@ export class Renderer {
     ctx.restore();
   }
 
+  // ── 3.8. Ether Winds Streamlines (Ventos de Éter) ─────────────────────────
+
+  _drawEtherStreams(ctx, etherStreams, now) {
+    if (!etherStreams || etherStreams.length === 0) return;
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    for (let sIdx = 0; sIdx < etherStreams.length; sIdx++) {
+      const stream = etherStreams[sIdx];
+      if (!stream || stream.life <= 0.01 || !stream.points || stream.points.length < 2) continue;
+
+      const pts = stream.points;
+      const alpha = Math.max(0, Math.min(1, stream.life));
+
+      // 1. Outer ethereal glow ribbon
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let p = 1; p < pts.length; p++) {
+        const p0 = pts[p - 1];
+        const p1 = pts[p];
+        const mx = (p0.x + p1.x) * 0.5;
+        const my = (p0.y + p1.y) * 0.5;
+        ctx.quadraticCurveTo(p0.x, p0.y, mx, my);
+      }
+      ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+
+      const streamWidth = Math.min(24, 10 + stream.speed * 6) * alpha;
+      ctx.lineWidth = streamWidth;
+      ctx.strokeStyle = `rgba(160, 230, 255, ${alpha * 0.28})`;
+      if (!this._isMobile) {
+        ctx.shadowColor = 'rgba(140, 220, 255, 0.5)';
+        ctx.shadowBlur = 12;
+      }
+      ctx.stroke();
+
+      // 2. Bright interior stream core
+      ctx.lineWidth = Math.max(1, 2.5 * alpha);
+      ctx.strokeStyle = `rgba(240, 250, 255, ${alpha * 0.65})`;
+      if (!this._isMobile) {
+        ctx.shadowBlur = 6;
+      }
+      ctx.stroke();
+      if (!this._isMobile) ctx.shadowBlur = 0;
+
+      // 3. Traveling stream sparks / motes along points
+      const travelingMoteCount = Math.min(pts.length, 4);
+      for (let m = 0; m < travelingMoteCount; m++) {
+        const offset = ((now * 0.0018 * (stream.speed + 0.5) + m / travelingMoteCount) % 1.0);
+        const idx = Math.floor(offset * (pts.length - 1));
+        const nextIdx = Math.min(pts.length - 1, idx + 1);
+        const frac = (offset * (pts.length - 1)) - idx;
+        const mx = pts[idx].x + (pts[nextIdx].x - pts[idx].x) * frac;
+        const my = pts[idx].y + (pts[nextIdx].y - pts[idx].y) * frac;
+
+        ctx.beginPath();
+        ctx.arc(mx, my, 1.8 * alpha, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.85})`;
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
   // ── 5.5. Ecological Sanctuaries & Spore Reefs ──────────────────────────────
 
   _drawSanctuaries(ctx, reefs, now, w, h, wind = { x: 0, y: 0 }, tide = null) {
@@ -857,6 +934,17 @@ export class Renderer {
       ctx.ellipse(bx, by, 34, 11, 0, 0, Math.PI * 2);
       ctx.fillStyle = isLight ? 'rgba(235, 215, 155, 0.22)' : 'rgba(120, 85, 180, 0.22)';
       ctx.fill();
+
+      // 2.5. Sacred crystalline mandala ring if player-planted
+      if (reef.isPlayerPlanted) {
+        ctx.save();
+        ctx.strokeStyle = isLight ? 'rgba(255, 240, 180, 0.45)' : 'rgba(190, 240, 255, 0.45)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(bx, by, 16 + Math.sin(now * 0.003) * 2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
 
       // 3. Swaying stalks and glowing bioluminescent bulbs
       const polyps = reef.polyps || [];
@@ -1391,6 +1479,88 @@ export class Renderer {
     ctx.shadowBlur  = this._isMobile ? 0 : 8;
     ctx.stroke();
     ctx.shadowBlur  = 0;
+  }
+
+  // ── 6.8. Ephemeral Constellations (Fiação de Constelações) ────────────────
+
+  _drawConstellations(ctx, constellations, now) {
+    if (!constellations || constellations.length === 0) return;
+
+    ctx.save();
+    for (let i = 0; i < constellations.length; i++) {
+      const c = constellations[i];
+      if (!c || c.life <= 0.01) continue;
+      const cA = c.creatureA;
+      const cB = c.creatureB;
+      if (!cA || !cB || !cA.isAlive || !cB.isAlive) continue;
+
+      const ax = cA.position.x;
+      const ay = cA.position.y;
+      const bx = cB.position.x;
+      const by = cB.position.y;
+
+      const pulse = 0.75 + 0.25 * Math.sin(now * 0.004 + (cA.dna?.luminosity || 0.5) * 10);
+      const alpha = Math.max(0, Math.min(1, c.life)) * pulse;
+
+      // 1. Outer celestial starlight filament
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = `rgba(180, 240, 255, ${alpha * 0.38})`;
+      if (!this._isMobile) {
+        ctx.shadowColor = 'rgba(160, 230, 255, 0.9)';
+        ctx.shadowBlur = 10;
+      }
+      ctx.stroke();
+
+      // 2. Focused laser filament core
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      ctx.lineWidth = 1.4;
+      ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.88})`;
+      if (!this._isMobile) {
+        ctx.shadowBlur = 5;
+      }
+      ctx.stroke();
+      if (!this._isMobile) ctx.shadowBlur = 0;
+
+      // 3. Four-point diamond star cross at both creature cores
+      this._drawStarNode(ctx, ax, ay, 9 * pulse, alpha);
+      this._drawStarNode(ctx, bx, by, 9 * pulse, alpha);
+    }
+    ctx.restore();
+  }
+
+  _drawStarNode(ctx, x, y, size, alpha) {
+    if (alpha <= 0.02) return;
+    const half = size * 0.5;
+    const quarter = size * 0.22;
+
+    ctx.save();
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
+    if (!this._isMobile) {
+      ctx.shadowColor = 'rgba(210, 245, 255, 1)';
+      ctx.shadowBlur = 8;
+    }
+
+    // Diamond star cross
+    ctx.beginPath();
+    ctx.moveTo(x, y - half);
+    ctx.quadraticCurveTo(x, y, x + half, y);
+    ctx.quadraticCurveTo(x, y, x, y + half);
+    ctx.quadraticCurveTo(x, y, x - half, y);
+    ctx.quadraticCurveTo(x, y, x, y - half);
+    ctx.fill();
+
+    // Center radiant spark
+    ctx.beginPath();
+    ctx.arc(x, y, quarter, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+    ctx.fill();
+
+    ctx.restore();
   }
 
   // ── 8. Dissolution echoes ─────────────────────────────────────────────────

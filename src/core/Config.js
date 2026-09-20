@@ -291,7 +291,32 @@ export const Config = Object.freeze({
     MICROGRAVITY_DAMPING: 0.72,     // Featherweight floating sensation
     SHIMMER_DURATION_MS: 12_000,    // Duration of silver stardust trail
     SHIMMER_TRAIL_RATE: 120,        // ms between stardust particle spawns
-    GROWTH_BOOST: 0.00015,          // Growth acceleration while floating in the aurora
+  }),
+
+  // ── Ether Winds (Ventos de Éter / Dual-Touch Currents) ────────────────────
+  ETHER_WINDS: Object.freeze({
+    MAX_STREAMS: 4,                 // Max concurrent flowing streamlines
+    STREAM_LIFESPAN_MS: 3800,       // Duration before streamline disperses
+    FORCE: 0.38,                    // Physical convective acceleration on creatures/spores
+    RADIUS: 90,                     // Influence radius around stream centerline
+    MAX_POINTS: 18,                 // Max vertices per streamline to prevent memory churn
+    MIN_DRAG_DIST: 10,              // Min pixels moved before adding a new stream node
+  }),
+
+  // ── Ephemeral Constellations (Fiação de Constelações) ─────────────────────
+  CONSTELLATIONS: Object.freeze({
+    MAX_ACTIVE: 6,                  // Max concurrent starlight filaments
+    DURATION_MS: 7500,              // Lifespan of the stellar bond
+    HARMONY_BOOST: 0.40,            // Serenity and empathy boost to connected creatures
+    CONNECT_DISTANCE: 46,           // Distance threshold to snap to creature during drag
+  }),
+
+  // ── Player-Built Sanctuaries (Sementeira de Santuários) ───────────────────
+  PLAYER_SANCTUARY: Object.freeze({
+    MAX_COUNT: 5,                   // Maximum player-planted sanctuaries in the world
+    HOLD_DURATION_MS: 1400,         // Hold duration in empty space to blossom a sanctuary
+    MIN_DIST_FROM_REEF: 120,        // Min distance away from existing natural/planted reefs
+    MIN_DIST_FROM_THRESHOLD: 55,    // Min distance away from threshold membrane
   }),
 
 });

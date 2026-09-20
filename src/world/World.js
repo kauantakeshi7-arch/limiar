@@ -90,6 +90,12 @@ export class World {
     /** Currently selected creature for inspection / empathy. @type {Creature|null} */
     this.inspectedCreature = null;
 
+    /** Ether winds streamlines sculpted by dual-touch / drag gestures. */
+    this.etherStreams  = [];
+
+    /** Ephemeral starlight constellation bonds between creatures. */
+    this.constellations = [];
+
     // ── Sanctuaries & Micro-Climates (Jardins de Pólipos) ─────────────────
     this.reefs = [
       {
@@ -264,14 +270,16 @@ export class World {
     // 4.8. Autonomous Cognitive AI: update drives, sensory perception, and conscious decisions
     this._decision.update(this.creatures, this.threshold, touchPoints, this.activeNectar, dt, now);
 
-    // 4.9. Update environmental sanctuaries, periodic cosmic tides, vents & aurora nursery
+    // 4.9. Update environmental sanctuaries, periodic cosmic tides, vents, aurora, ether streams & constellations
     this._updateTide(now, dt);
     this._updateReefs(now, dt);
     this._updateVents(now, dt);
     this._updateAuroraNursery(now, dt);
+    this._updateEtherStreams(now, dt);
+    this._updateConstellations(now, dt);
 
-    // 5. Physics: steering, movement, sleep damping, dance, nectar pull, thermocline convection, tide, reefs, vents & aurora
-    this._physics.update(this.creatures, this.threshold, dt, this.wind, touchPoints, this.activeNectar, now, this.tide, this.reefs, this.vents, this.season);
+    // 5. Physics: steering, movement, sleep damping, dance, nectar pull, thermocline convection, tide, reefs, vents, aurora & ether winds
+    this._physics.update(this.creatures, this.threshold, dt, this.wind, touchPoints, this.activeNectar, now, this.tide, this.reefs, this.vents, this.season, this.etherStreams);
 
     // 5.5. Update active nectar consumption
     this._updateNectar(now, dt);
@@ -360,6 +368,172 @@ export class World {
   bubble(x, y) {
     this.particles.emitTransformBurst(x, y, new Color(280, 50, 70));
     globalBus.emit(Events.BUBBLE, { x, y });
+  }
+
+  /**
+   * "Vento de Éter" — sculpt flowing convective streamlines that herd creatures and spores.
+   * @param {number} x
+   * @param {number} y
+   * @param {number} vx
+   * @param {number} vy
+   */
+  addEtherStream(x, y, vx, vy) {
+    const speed = Math.hypot(vx, vy);
+    if (speed < 0.05) return;
+
+    const maxStreams = Config.ETHER_WINDS?.MAX_STREAMS || 4;
+    const maxPoints = Config.ETHER_WINDS?.MAX_POINTS || 18;
+
+    // Check if we can append point to an active stream whose tip is nearby
+    let current = null;
+    for (let i = this.etherStreams.length - 1; i >= 0; i--) {
+      const s = this.etherStreams[i];
+      if (s.life > 0.35 && Math.hypot(x - s.x, y - s.y) < 55) {
+        current = s;
+        break;
+      }
+    }
+
+    if (current) {
+      current.x = x;
+      current.y = y;
+      current.vx = current.vx * 0.7 + vx * 0.3;
+      current.vy = current.vy * 0.7 + vy * 0.3;
+      current.life = 1.0;
+      if (current.points.length >= maxPoints) {
+        current.points.shift();
+      }
+      current.points.push({ x, y });
+    } else {
+      if (this.etherStreams.length >= maxStreams) {
+        this.etherStreams.shift();
+      }
+      this.etherStreams.push({
+        id: `stream_${Date.now()}_${Math.random()}`,
+        x, y,
+        vx, vy,
+        speed,
+        life: 1.0,
+        maxLife: Config.ETHER_WINDS?.STREAM_LIFESPAN_MS || 3800,
+        radius: Config.ETHER_WINDS?.RADIUS || 90,
+        points: [{ x, y }],
+      });
+    }
+
+    // Emit gentle stardust mote along the streamline
+    this.particles.emitEtherMote(x, y, vx, vy);
+  }
+
+  /**
+   * "Fiação de Constelações" — weave a temporary starlight filament connecting two creatures.
+   * @param {import('../entities/Creature.js').Creature} creatureA
+   * @param {import('../entities/Creature.js').Creature} creatureB
+   */
+  addConstellation(creatureA, creatureB) {
+    if (!creatureA || !creatureB || creatureA === creatureB) return;
+    if (!creatureA.isAlive || !creatureB.isAlive) return;
+
+    // Check if bond already exists between this pair
+    for (let i = 0; i < this.constellations.length; i++) {
+      const c = this.constellations[i];
+      if ((c.creatureA === creatureA && c.creatureB === creatureB) ||
+          (c.creatureA === creatureB && c.creatureB === creatureA)) {
+        c.life = 1.0;
+        c.createdAt = performance.now();
+        return;
+      }
+    }
+
+    const maxActive = Config.CONSTELLATIONS?.MAX_ACTIVE || 6;
+    if (this.constellations.length >= maxActive) {
+      this.constellations.shift();
+    }
+
+    this.constellations.push({
+      id: `constell_${creatureA.id}_${creatureB.id}`,
+      creatureA,
+      creatureB,
+      createdAt: performance.now(),
+      duration: Config.CONSTELLATIONS?.DURATION_MS || 7500,
+      life: 1.0,
+    });
+
+    // Harmonize emotional resonance, energy and bioluminescence
+    const boost = Config.CONSTELLATIONS?.HARMONY_BOOST || 0.40;
+    creatureA.experiencePeace(boost);
+    creatureB.experiencePeace(boost);
+    const avgEnergy = (creatureA.energy + creatureB.energy) * 0.5;
+    creatureA.energy = avgEnergy;
+    creatureB.energy = avgEnergy;
+
+    creatureA.emitBioluminescence?.(1.0, performance.now());
+    creatureB.emitBioluminescence?.(1.0, performance.now());
+
+    // Sound polyphonic celestial chord
+    const midX = (creatureA.position.x + creatureB.position.x) / (2 * (this._width || 1200));
+    const midY = (creatureA.position.y + creatureB.position.y) / (2 * (this._height || 800));
+    this.audio.playConstellationChord(creatureA.soundFreq, creatureB.soundFreq, midX, midY);
+
+    // Burst of star sparks along the new connection
+    for (let i = 0; i < 6; i++) {
+      const t = (i + 0.5) / 6;
+      const sx = creatureA.position.x + (creatureB.position.x - creatureA.position.x) * t;
+      const sy = creatureA.position.y + (creatureB.position.y - creatureA.position.y) * t;
+      this.particles.emitConstellationSpark(sx, sy, creatureA.color);
+    }
+
+    this.diary.add(`✨ Constelação efêmera tecida entre ${creatureA.name} e ${creatureB.name}.`);
+  }
+
+  /**
+   * "Sementeira de Santuários" — plant a player-built sanctuary reef.
+   * @param {number} x
+   * @param {number} y
+   * @returns {boolean} Whether planting succeeded.
+   */
+  plantSanctuary(x, y) {
+    const maxCount = Config.PLAYER_SANCTUARY?.MAX_COUNT || 5;
+    const currentCount = this.reefs.filter(r => r.isPlayerPlanted).length;
+    if (currentCount >= maxCount) return false;
+
+    const minThresh = Config.PLAYER_SANCTUARY?.MIN_DIST_FROM_THRESHOLD || 55;
+    if (Math.abs(y - this.threshold.y) < minThresh) return false;
+
+    const minReefDist = Config.PLAYER_SANCTUARY?.MIN_DIST_FROM_REEF || 120;
+    for (let i = 0; i < this.reefs.length; i++) {
+      const r = this.reefs[i];
+      if (Math.hypot(x - r.baseX, y - r.baseY) < minReefDist) return false;
+    }
+
+    const isLight = y < this.threshold.y;
+    const newReef = {
+      id: `reef_player_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      zone: isLight ? Config.ZONE.LIGHT : Config.ZONE.SHADOW,
+      u: x / this._width,
+      v: y / this._height,
+      baseX: x,
+      baseY: y,
+      isPlayerPlanted: true,
+      polyps: isLight ? [
+        { offsetX: -16, height: 42, phase: 0.3, bulbRadius: 6.5, color: new Color(52, 90, 85) },
+        { offsetX: -3,  height: 56, phase: 1.8, bulbRadius: 8.0, color: new Color(68, 95, 88) },
+        { offsetX: 11,  height: 46, phase: 3.4, bulbRadius: 7.0, color: new Color(44, 88, 80) },
+        { offsetX: 22,  height: 36, phase: 5.0, bulbRadius: 5.5, color: new Color(60, 92, 85) },
+      ] : [
+        { offsetX: -16, height: 42, phase: 0.3, bulbRadius: 6.5, color: new Color(175, 85, 80) },
+        { offsetX: -3,  height: 58, phase: 1.8, bulbRadius: 8.5, color: new Color(200, 90, 85) },
+        { offsetX: 11,  height: 48, phase: 3.4, bulbRadius: 7.0, color: new Color(160, 80, 75) },
+        { offsetX: 22,  height: 34, phase: 5.0, bulbRadius: 5.5, color: new Color(225, 95, 90) },
+      ],
+      sporeTimer: 1400,
+      pulsePhase: 0,
+    };
+
+    this.reefs.push(newReef);
+    this.particles.emitSanctuaryBloom(x, y, isLight);
+    this.audio.playSanctuaryBloom(x / this._width, y / this._height);
+    this.diary.add('🌸 Um novo santuário sagrado de pólipos floresceu por semeadura direta.');
+    return true;
   }
 
   /**
@@ -960,8 +1134,53 @@ export class World {
     }
   }
 
+  _updateEtherStreams(now, dt) {
+    if (this.etherStreams.length === 0) return;
+    for (let i = this.etherStreams.length - 1; i >= 0; i--) {
+      const stream = this.etherStreams[i];
+      stream.life -= dt / stream.maxLife;
+      if (stream.life <= 0) {
+        const last = this.etherStreams.pop();
+        if (i < this.etherStreams.length) this.etherStreams[i] = last;
+        continue;
+      }
+      // Gentle physical translation along velocity
+      const drift = (dt / 16.67) * 0.25;
+      stream.x += stream.vx * drift;
+      stream.y += stream.vy * drift;
+      for (let p = 0; p < stream.points.length; p++) {
+        stream.points[p].x += stream.vx * drift * 0.5;
+        stream.points[p].y += stream.vy * drift * 0.5;
+      }
+    }
+  }
+
+  _updateConstellations(now, dt) {
+    if (this.constellations.length === 0) return;
+    for (let i = this.constellations.length - 1; i >= 0; i--) {
+      const c = this.constellations[i];
+      c.life -= dt / c.duration;
+      if (c.life <= 0 || !c.creatureA.isAlive || !c.creatureB.isAlive) {
+        const last = this.constellations.pop();
+        if (i < this.constellations.length) this.constellations[i] = last;
+        continue;
+      }
+      // Continuous gentle tranquility while connected
+      c.creatureA.experiencePeace(0.004 * (dt / 16.67));
+      c.creatureB.experiencePeace(0.004 * (dt / 16.67));
+      if (Math.random() < 0.06) {
+        const t = Math.random();
+        const sx = c.creatureA.position.x + (c.creatureB.position.x - c.creatureA.position.x) * t;
+        const sy = c.creatureA.position.y + (c.creatureB.position.y - c.creatureA.position.y) * t;
+        this.particles.emitConstellationSpark(sx, sy, c.creatureA.color);
+      }
+    }
+  }
+
   _updateSpores(now, dt) {
     if (this.activeSpores.length === 0) return;
+    const streamRadius = Config.ETHER_WINDS?.RADIUS || 90;
+
     for (let i = this.activeSpores.length - 1; i >= 0; i--) {
       const spore = this.activeSpores[i];
       spore.life -= dt / spore.maxLife;
@@ -970,8 +1189,27 @@ export class World {
         if (i < this.activeSpores.length) this.activeSpores[i] = last;
         continue;
       }
-      spore.x += (spore.vx + this.wind.x * 0.5) * (dt / 16.67);
-      spore.y += (spore.vy + this.wind.y * 0.2) * (dt / 16.67);
+
+      // Convective nudge from ether winds
+      let evx = 0, evy = 0;
+      if (this.etherStreams && this.etherStreams.length > 0) {
+        for (let s = 0; s < this.etherStreams.length; s++) {
+          const st = this.etherStreams[s];
+          if (!st || st.life <= 0) continue;
+          const sdx = spore.x - st.x;
+          const sdy = spore.y - st.y;
+          const sDistSq = sdx * sdx + sdy * sdy;
+          if (sDistSq < streamRadius * streamRadius) {
+            const sDist = Math.sqrt(sDistSq);
+            const sFactor = (1 - sDist / streamRadius) * st.life * 0.45;
+            evx += st.vx * sFactor;
+            evy += st.vy * sFactor;
+          }
+        }
+      }
+
+      spore.x += (spore.vx + this.wind.x * 0.5 + evx) * (dt / 16.67);
+      spore.y += (spore.vy + this.wind.y * 0.2 + evy) * (dt / 16.67);
 
       // Boundaries clamp
       if (spore.x < 0 || spore.x > this._width || spore.y < 0 || spore.y > this._height) {

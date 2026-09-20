@@ -51,6 +51,10 @@ export class Game {
     this._holdStartTime  = 0;
     this._nectarSpawned  = false;
     this._callEmitted    = false;
+    this._sanctuaryPlanted = false;
+    this._dragCreature   = null;
+    this._lastCentroid   = null;
+    this._lastPointerX   = null;
     this._lastPointerY   = null;
     this._touchDisturbances = [];
 
@@ -68,6 +72,8 @@ export class Game {
       activeSpores:      null,
       playerCalls:       null,
       inspectedCreature: null,
+      etherStreams:      null,
+      constellations:    null,
       diurnalFactor:     0,
       diurnalCycle:      0,
       reefs:             null,
@@ -147,7 +153,7 @@ export class Game {
 
       this._world.update(timestamp, dt, touchDisturbances);
 
-      // Check hold gestures (Celestial Nectar on threshold, Player Call away from threshold)
+      // Check hold gestures (Celestial Nectar on threshold, Player Call or Sanctuary Seeding away from threshold)
       if (this._holdStartPos) {
         const holdElapsed = timestamp - this._holdStartTime;
         const nearThreshold = Math.abs(this._holdStartPos.y - this._world.threshold.y) < 36;
@@ -160,14 +166,28 @@ export class Game {
             this._nectarSpawned = true;
             this._vibrate(Config.HAPTICS?.NECTAR_CONDENSE_MS || 40);
           }
-        } else if (!nearThreshold && !this._callEmitted) {
+        } else if (!nearThreshold) {
           const callReq = Config.INTERACTION_EXPANDED?.CALL_HOLD_MS || 380;
-          if (holdElapsed > 160 && holdElapsed < callReq) {
+          const sanctuaryReq = Config.PLAYER_SANCTUARY?.HOLD_DURATION_MS || 1400;
+
+          if (holdElapsed > 160 && holdElapsed < callReq && !this._callEmitted) {
             this._world.particles.emitNectarSwirl(this._holdStartPos.x, this._holdStartPos.y);
-          } else if (holdElapsed >= callReq) {
+          } else if (holdElapsed >= callReq && !this._callEmitted) {
             this._world.emitPlayerCall(this._holdStartPos.x, this._holdStartPos.y);
             this._callEmitted = true;
             this._vibrate(Config.HAPTICS?.CALL_HARMONY_MS || 28);
+          }
+
+          // Sementeira de Santuários: hold continued beyond 650ms towards 1400ms in open water
+          if (holdElapsed > 650 && holdElapsed < sanctuaryReq && !this._sanctuaryPlanted) {
+            const progress = (holdElapsed - 650) / (sanctuaryReq - 650);
+            this._world.particles.emitSanctuaryGathering(this._holdStartPos.x, this._holdStartPos.y, progress);
+          } else if (holdElapsed >= sanctuaryReq && !this._sanctuaryPlanted) {
+            const planted = this._world.plantSanctuary(this._holdStartPos.x, this._holdStartPos.y);
+            if (planted) {
+              this._sanctuaryPlanted = true;
+              this._vibrate(45);
+            }
           }
         }
       }
@@ -203,6 +223,8 @@ export class Game {
       ro.activeSpores      = this._world.activeSpores;
       ro.playerCalls       = this._world.playerCalls;
       ro.inspectedCreature = this._world.inspectedCreature;
+      ro.etherStreams      = this._world.etherStreams;
+      ro.constellations    = this._world.constellations;
       ro.diurnalFactor     = this._world.diurnalFactor;
       ro.diurnalCycle      = this._world.diurnalCycle;
       ro.reefs             = this._world.reefs;
@@ -303,7 +325,10 @@ export class Game {
       this._holdStartTime  = performance.now();
       this._nectarSpawned  = false;
       this._callEmitted    = false;
+      this._sanctuaryPlanted = false;
+      this._lastPointerX   = x;
       this._lastPointerY   = y;
+      this._dragCreature   = this._findCreatureAt(x, y, Config.CONSTELLATIONS?.CONNECT_DISTANCE || 46);
       this._ripples.push({ x, y, startTime: performance.now() });
     }
 
@@ -333,7 +358,52 @@ export class Game {
       this._activePointers.set(event.pointerId, pt);
     }
 
+    // 1. Dual-Touch Ether Winds (convective fluid streamlines)
+    if (this._activePointers.size >= 2) {
+      let sumX = 0, sumY = 0;
+      for (const p of this._activePointers.values()) {
+        sumX += p.x;
+        sumY += p.y;
+      }
+      const cx = sumX / this._activePointers.size;
+      const cy = sumY / this._activePointers.size;
+      if (this._lastCentroid) {
+        const cdx = cx - this._lastCentroid.x;
+        const cdy = cy - this._lastCentroid.y;
+        const cDist = Math.hypot(cdx, cdy);
+        if (cDist >= (Config.ETHER_WINDS?.MIN_DRAG_DIST || 10)) {
+          this._world.addEtherStream(cx, cy, cdx * 0.25, cdy * 0.25);
+          this._lastCentroid.x = cx;
+          this._lastCentroid.y = cy;
+        }
+      } else {
+        this._lastCentroid = { x: cx, y: cy };
+      }
+    } else {
+      this._lastCentroid = null;
+    }
+
+    // Desktop Shift+Drag Ether Winds
+    if (event.shiftKey && this._lastPointerX !== null && this._lastPointerY !== null) {
+      const mdx = px - this._lastPointerX;
+      const mdy = py - this._lastPointerY;
+      const mDist = Math.hypot(mdx, mdy);
+      if (mDist >= (Config.ETHER_WINDS?.MIN_DRAG_DIST || 10)) {
+        this._world.addEtherStream(px, py, mdx * 0.25, mdy * 0.25);
+      }
+    }
+
     if (!event.isPrimary) return;
+
+    // 2. Stellar Weaving (connect creatures by dragging between them)
+    if (this._dragCreature && this._dragCreature.isAlive) {
+      const targetCreature = this._findCreatureAt(px, py, Config.CONSTELLATIONS?.CONNECT_DISTANCE || 46);
+      if (targetCreature && targetCreature !== this._dragCreature && targetCreature.isAlive) {
+        this._world.addConstellation(this._dragCreature, targetCreature);
+        this._dragCreature = targetCreature; // chain to next creature
+        this._vibrate(Config.HAPTICS?.CALL_HARMONY_MS || 28);
+      }
+    }
 
     // Cancel hold if moved significantly
     if (this._holdStartPos) {
@@ -358,6 +428,7 @@ export class Game {
         this._world.pluckHarp(px / this._renderer.width);
       }
     }
+    this._lastPointerX = px;
     this._lastPointerY = py;
 
     this._world.threshold.moveDrag(py);
@@ -375,15 +446,19 @@ export class Game {
     const elapsed = performance.now() - (this._pointerDownTime || 0);
     const dist = this._pointerDownPos ? Math.hypot(x - this._pointerDownPos.x, y - this._pointerDownPos.y) : 999;
 
+    this._dragCreature = null;
+    this._lastCentroid = null;
     this._holdStartPos = null;
+    this._lastPointerX = null;
     this._lastPointerY = null;
     this._pointerDownPos = null;
     this._world.threshold.endDrag();
 
-    // If hold-to-call or nectar was triggered, do not whisper/inspect
-    if (this._nectarSpawned || this._callEmitted) {
+    // If hold-to-call, nectar, or sanctuary was triggered, do not whisper/inspect
+    if (this._nectarSpawned || this._callEmitted || this._sanctuaryPlanted) {
       this._nectarSpawned = false;
       this._callEmitted = false;
+      this._sanctuaryPlanted = false;
       return;
     }
 
@@ -582,5 +657,29 @@ export class Game {
       x: (event.clientX - this._rect.left),
       y: (event.clientY - this._rect.top),
     };
+  }
+
+  /**
+   * Find the closest living creature within maximum touch radius.
+   * @param {number} x
+   * @param {number} y
+   * @param {number} [maxDist=46]
+   * @returns {import('../entities/Creature.js').Creature|null}
+   */
+  _findCreatureAt(x, y, maxDist = 46) {
+    if (!this._world || !this._world.creatures) return null;
+    let closest = null;
+    let minDist = maxDist;
+    const creatures = this._world.creatures;
+    for (let i = 0; i < creatures.length; i++) {
+      const c = creatures[i];
+      if (!c.isAlive) continue;
+      const d = Math.hypot(c.position.x - x, c.position.y - y);
+      if (d < c.radius + maxDist && d < minDist) {
+        minDist = d;
+        closest = c;
+      }
+    }
+    return closest;
   }
 }

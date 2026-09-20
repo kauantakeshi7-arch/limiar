@@ -409,6 +409,101 @@ export class AudioEngine {
     }
   }
 
+  /**
+   * Harmonious polyphonic celestial chord sounding when stellar weaving
+   * connects two creatures with an ephemeral constellation.
+   * @param {number} [freqA=329.63] - Primary frequency from creature A's genome
+   * @param {number} [freqB=493.88] - Secondary frequency from creature B's genome
+   * @param {number} [xRatio=0.5]
+   * @param {number} [yRatio=0.5]
+   */
+  playConstellationChord(freqA = 329.63, freqB = 493.88, xRatio = 0.5, yRatio = 0.5) {
+    if (!this._initialized || this.isMuted) return;
+    const now = this._ctx.currentTime;
+    const panner = this._makePanner(xRatio);
+    const filter = this._makeDepthFilter(yRatio);
+
+    const f1 = (freqA && freqA > 50 && freqA < 3000) ? freqA : 329.63;
+    let f2 = (freqB && freqB > 50 && freqB < 3000) ? freqB : (f1 * 1.5);
+    // Ensure pleasing musical interval (prevent harsh beating if too close)
+    if (Math.abs(f1 - f2) < 20) {
+      f2 = f1 * 1.5; // perfect fifth
+    }
+
+    const osc1 = this._ctx.createOscillator();
+    const osc2 = this._ctx.createOscillator();
+    const gain = this._makeGain(0.0001);
+
+    osc1.type = 'sine';
+    osc1.frequency.value = f1;
+    osc2.type = 'sine';
+    osc2.frequency.value = f2;
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(filter);
+    filter.connect(panner);
+    panner.connect(this._reverb);
+
+    const dur = 2.8;
+    osc1.start(now);
+    osc2.start(now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(0.024, now + 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+
+    osc1.stop(now + dur + 0.05);
+    osc2.stop(now + dur + 0.05);
+    this._cleanupOnEnded(osc1, osc2, gain, filter, panner);
+  }
+
+  /**
+   * Resonant crystalline harmonic chime cascade sounding when a player-built
+   * sanctuary reef blossoms in the world.
+   * @param {number} [xRatio=0.5]
+   * @param {number} [yRatio=0.5]
+   */
+  playSanctuaryBloom(xRatio = 0.5, yRatio = 0.5) {
+    if (!this._initialized || this.isMuted) return;
+    const now = this._ctx.currentTime;
+    const panner = this._makePanner(xRatio);
+    const filter = this._makeDepthFilter(yRatio);
+
+    // Golden Solfeggio triad: 432 Hz, 540 Hz (major third), 648 Hz (fifth)
+    const notes = [432.00, 540.00, 648.00];
+    const dur = 3.2;
+
+    for (let i = 0; i < notes.length; i++) {
+      const freq = notes[i];
+      const t = now + i * 0.08;
+
+      const osc = this._ctx.createOscillator();
+      const oscOvertone = this._ctx.createOscillator();
+      const gain = this._makeGain(0.0001);
+
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      oscOvertone.type = 'sine';
+      oscOvertone.frequency.value = freq * 2.0; // octave sparkle
+
+      osc.connect(gain);
+      oscOvertone.connect(gain);
+      gain.connect(filter);
+      filter.connect(panner);
+      panner.connect(this._reverb);
+
+      osc.start(t);
+      oscOvertone.start(t);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(0.022, t + 0.06);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+      osc.stop(t + dur + 0.05);
+      oscOvertone.stop(t + dur + 0.05);
+      this._cleanupOnEnded(osc, oscOvertone, gain, i === notes.length - 1 ? filter : null, i === notes.length - 1 ? panner : null);
+    }
+  }
+
   dispose() {
     if (!this._initialized) return;
     this._ctx.close();

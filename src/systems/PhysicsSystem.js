@@ -64,8 +64,9 @@ export class PhysicsSystem {
    * @param {Array<object>} [reefs] - Sanctuary reefs in the world.
    * @param {Array<object>} [vents] - Hydrothermal vents in the world.
    * @param {object|null} [season] - Cosmic season state.
+   * @param {Array<object>} [etherStreams] - Active ether winds streamlines.
    */
-  update(creatures, threshold, dt, wind, touchPoints = [], activeNectar = null, now = 0, tide = null, reefs = [], vents = [], season = null) {
+  update(creatures, threshold, dt, wind, touchPoints = [], activeNectar = null, now = 0, tide = null, reefs = [], vents = [], season = null, etherStreams = []) {
     const dtC  = Math.min(dt, 50);
     const time = now || performance.now();
 
@@ -76,7 +77,7 @@ export class PhysicsSystem {
       if (creature.state === CreatureState.WITNESS) continue;
       if (creature.isDancing) continue;
 
-      const steering = this._computeSteering(creature, creatures, threshold, wind, touchPoints, activeNectar, time, tide, reefs, vents, season);
+      const steering = this._computeSteering(creature, creatures, threshold, wind, touchPoints, activeNectar, time, tide, reefs, vents, season, etherStreams);
       this._integrate(creature, steering, dtC, season);
     }
 
@@ -129,7 +130,7 @@ export class PhysicsSystem {
       }
     }
 
-    this._updateSymbioticPairs(creatures, threshold, wind, dtC, touchPoints, activeNectar, time, tide, reefs, vents, season);
+    this._updateSymbioticPairs(creatures, threshold, wind, dtC, touchPoints, activeNectar, time, tide, reefs, vents, season, etherStreams);
     this._updateDancingPairs(creatures, dtC);
 
     // Final boundary clamp, trail push, and kinematics update guarantee for all alive entities
@@ -144,7 +145,7 @@ export class PhysicsSystem {
 
   // ── Steering composition ──────────────────────────────────────────────────
 
-  _computeSteering(creature, allCreatures, threshold, wind, touchPoints = [], activeNectar = null, now = 0, tide = null, reefs = [], vents = [], season = null) {
+  _computeSteering(creature, allCreatures, threshold, wind, touchPoints = [], activeNectar = null, now = 0, tide = null, reefs = [], vents = [], season = null, etherStreams = []) {
     const wander   = this._wander(creature);
     const flock    = this._flocking(creature, allCreatures);
     const zoneAttr = this._zoneAttraction(creature, threshold);
@@ -365,6 +366,29 @@ export class PhysicsSystem {
       }
     }
 
+    // Convective flow forces from Ether Winds (Ventos de Éter)
+    let etherStreamX = 0, etherStreamY = 0;
+    if (etherStreams && etherStreams.length > 0) {
+      const streamRadius = Config.ETHER_WINDS?.RADIUS || 90;
+      const streamForce  = Config.ETHER_WINDS?.FORCE || 0.38;
+      for (let sIdx = 0; sIdx < etherStreams.length; sIdx++) {
+        const stream = etherStreams[sIdx];
+        if (!stream || stream.life <= 0) continue;
+        const dx = px - stream.x;
+        const dy = py - stream.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq < streamRadius * streamRadius) {
+          const dist = Math.sqrt(distSq);
+          const factor = (1 - dist / streamRadius) * stream.life;
+          etherStreamX += stream.vx * streamForce * factor;
+          etherStreamY += stream.vy * streamForce * factor;
+          if (creature.isSleeping && factor > 0.35) {
+            creature.wake();
+          }
+        }
+      }
+    }
+
     // Combine all steering forces into scalar accumulators (only 1 Vector2 allocated)
     const steerX = wander.x * BOIDS.WANDER
                  + flock.sepX * BOIDS.SEPARATION
@@ -381,7 +405,8 @@ export class PhysicsSystem {
                  + tideX
                  + reefX
                  + ventX
-                 + auroraX;
+                 + auroraX
+                 + etherStreamX;
 
     const steerY = wander.y * BOIDS.WANDER
                  + flock.sepY * BOIDS.SEPARATION
@@ -398,7 +423,8 @@ export class PhysicsSystem {
                  + tideY
                  + reefY
                  + ventY
-                 + auroraY;
+                 + auroraY
+                 + etherStreamY;
 
     this._steerScratch.x = steerX;
     this._steerScratch.y = steerY;
@@ -763,7 +789,7 @@ export class PhysicsSystem {
 
   // ── Symbiotic pairs ───────────────────────────────────────────────────────
 
-  _updateSymbioticPairs(creatures, threshold, wind, dt, touchPoints = [], activeNectar = null, now = 0, tide = null, reefs = [], vents = [], season = null) {
+  _updateSymbioticPairs(creatures, threshold, wind, dt, touchPoints = [], activeNectar = null, now = 0, tide = null, reefs = [], vents = [], season = null, etherStreams = []) {
     const processed = this._processedSymbiotic;
     processed.clear();
 
@@ -783,7 +809,7 @@ export class PhysicsSystem {
       processed.add(creature.id);
       processed.add(partner.id);
 
-      const steer = this._computeSteering(creature, creatures, threshold, wind, touchPoints, activeNectar, now, tide, reefs, vents, season);
+      const steer = this._computeSteering(creature, creatures, threshold, wind, touchPoints, activeNectar, now, tide, reefs, vents, season, etherStreams);
       this._integrate(creature, { x: steer.x * 0.5, y: steer.y * 0.5 }, dt, season);
 
       const angle = (now || Date.now()) * 0.001;
