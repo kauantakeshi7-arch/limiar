@@ -15,6 +15,9 @@ import { Color } from '../utils/Color.js';
 import { Vector2 } from '../utils/Vector2.js';
 import { globalBus, Events } from '../core/EventEmitter.js';
 
+const SPORE_COLOR_LIGHT  = Object.freeze(new Color(55, 90, 85));
+const SPORE_COLOR_SHADOW = Object.freeze(new Color(265, 80, 80));
+
 /**
  * World — The scene graph and systems orchestrator.
  *
@@ -25,6 +28,17 @@ import { globalBus, Events } from '../core/EventEmitter.js';
  * Does NOT handle raw input — that is the Game's job.
  */
 export class World {
+  static _SEASON_LIST = Object.freeze([
+    Config.SEASONS?.TYPES?.CRYSTAL_TIDE || 'crystal_tide',
+    Config.SEASONS?.TYPES?.BOREAL_NIGHT || 'boreal_night',
+    Config.SEASONS?.TYPES?.GOLDEN_ECLIPSE || 'golden_eclipse',
+  ]);
+
+  static _ROMAN_GENS = Object.freeze(['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X']);
+
+  static _SPORE_COLOR_LIGHT  = SPORE_COLOR_LIGHT;
+  static _SPORE_COLOR_SHADOW = SPORE_COLOR_SHADOW;
+
   /**
    * @param {number} width  - Canvas CSS width.
    * @param {number} height - Canvas CSS height.
@@ -69,6 +83,9 @@ export class World {
 
     /** Cosmic player call ripple waves { x, y, radius, maxRadius, life, decay, createdAt }. */
     this.playerCalls   = [];
+
+    /** Pending creature chirps queued by player calls, synchronized with simulation dt */
+    this._pendingChirps = [];
 
     /** Currently selected creature for inspection / empathy. @type {Creature|null} */
     this.inspectedCreature = null;
@@ -275,6 +292,7 @@ export class World {
     this._emitFloraSporeChance();
     this._updateSpores(now, dt);
     this._updatePlayerCalls(now, dt);
+    this._updatePendingChirps(dt);
 
     // 8. Sync audio to creature positions, seasons & adaptive atmosphere
     this.audio.update(now, this.diurnalFactor, this.creatures, this.season);
@@ -382,7 +400,12 @@ export class World {
     const released = this.threshold.brushFlora(px, py, this._width);
     if (released && released.length > 0) {
       for (const r of released) {
-        if (this.activeSpores.length >= 32) this.activeSpores.shift();
+        if (this.activeSpores.length >= 32) {
+          for (let sIdx = 0; sIdx < this.activeSpores.length - 1; sIdx++) {
+            this.activeSpores[sIdx] = this.activeSpores[sIdx + 1];
+          }
+          this.activeSpores.length = 31;
+        }
         this.activeSpores.push({
           x: r.x,
           y: r.y,
@@ -391,7 +414,7 @@ export class World {
           life: 1.0,
           maxLife: 10_000 + Math.random() * 5_000,
           radius: 3.5 + Math.random() * 2,
-          color: r.side < 0 ? new Color(55, 90, 85) : new Color(265, 80, 80),
+          color: r.side < 0 ? SPORE_COLOR_LIGHT : SPORE_COLOR_SHADOW,
           nutrition: Config.INTERACTION_EXPANDED?.SPORE_NUTRITION || 0.22,
         });
         this.particles.emitFloraSpore(r.x, r.y, r.side);
@@ -416,7 +439,12 @@ export class World {
       decay: 0.0008,
       createdAt: performance.now(),
     };
-    if (this.playerCalls.length >= 8) this.playerCalls.shift();
+    if (this.playerCalls.length >= 8) {
+      for (let cIdx = 0; cIdx < this.playerCalls.length - 1; cIdx++) {
+        this.playerCalls[cIdx] = this.playerCalls[cIdx + 1];
+      }
+      this.playerCalls.length = 7;
+    }
     this.playerCalls.push(call);
     this.audio.playPlayerCall(px / this._width, py / this._height);
     globalBus.emit(Events.PLAYER_CALL, { x: px, y: py });
@@ -426,7 +454,9 @@ export class World {
     for (let i = 0; i < this.creatures.length; i++) {
       const c = this.creatures[i];
       if (!c.isAlive) continue;
-      const d = Math.hypot(c.position.x - px, c.position.y - py);
+      const dx = px - c.position.x;
+      const dy = py - c.position.y;
+      const d = Math.hypot(dx, dy);
       if (d < call.maxRadius) {
         if (c.isSleeping) c.wake();
         c.curiosity = Math.min(1.0, c.curiosity + 0.35);
@@ -434,19 +464,17 @@ export class World {
 
         const mass = Math.pow(Math.max(0.6, c.radius / 14), 1.4);
         const impulse = 0.35 / Math.sqrt(mass);
-        const angle = Math.atan2(py - c.position.y, px - c.position.x);
-        c.velocity.x += Math.cos(angle) * impulse;
-        c.velocity.y += Math.sin(angle) * impulse;
+        const invD = d > 0.001 ? 1 / d : 0;
+        c.velocity.x += dx * invD * impulse;
+        c.velocity.y += dy * invD * impulse;
 
         if (responderCount < 3 && Math.random() < 0.7) {
-          const delay = 320 + responderCount * 280;
+          const delay = (320 + responderCount * 280) / 1000;
           responderCount++;
-          setTimeout(() => {
-            if (c.isAlive) {
-              this.audio.playCreatureChirp(c, this._width, this._height);
-              this.particles.emitDreamMote(c.position.x, c.position.y, c.color);
-            }
-          }, delay);
+          this._pendingChirps.push({
+            creature: c,
+            timeRemaining: delay,
+          });
         }
       }
     }
@@ -748,11 +776,7 @@ export class World {
   }
 
   _updateSeasons(now, dt) {
-    const seasonList = [
-      Config.SEASONS?.TYPES?.CRYSTAL_TIDE || 'crystal_tide',
-      Config.SEASONS?.TYPES?.BOREAL_NIGHT || 'boreal_night',
-      Config.SEASONS?.TYPES?.GOLDEN_ECLIPSE || 'golden_eclipse',
-    ];
+    const seasonList = World._SEASON_LIST;
     const dur = Config.SEASONS?.SEASON_DURATION_MS || 240_000;
     const transDur = Config.SEASONS?.TRANSITION_DURATION_MS || 32_000;
     const totalCycle = dur * seasonList.length;
@@ -984,6 +1008,22 @@ export class World {
     }
   }
 
+  _updatePendingChirps(dt) {
+    if (this._pendingChirps.length === 0) return;
+    for (let i = this._pendingChirps.length - 1; i >= 0; i--) {
+      const pc = this._pendingChirps[i];
+      pc.timeRemaining -= dt;
+      if (pc.timeRemaining <= 0) {
+        if (pc.creature.isAlive) {
+          this.audio.playCreatureChirp(pc.creature, this._width, this._height);
+          this.particles.emitDreamMote(pc.creature.position.x, pc.creature.position.y, pc.creature.color);
+        }
+        const last = this._pendingChirps.pop();
+        if (i < this._pendingChirps.length) this._pendingChirps[i] = last;
+      }
+    }
+  }
+
   // ── Event subscriptions ───────────────────────────────────────────────────
 
   _subscribeToEvents() {
@@ -1032,8 +1072,7 @@ export class World {
       this.particles.emitTransformBurst(position.x, position.y, child.color);
       this.bestiary.registerCreature(child);
 
-      const genRomans = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
-      const roman = genRomans[Math.min(9, child.generation - 1)] || child.generation;
+      const roman = World._ROMAN_GENS[Math.min(9, child.generation - 1)] || child.generation;
       this.diary.add(`🌱 Da dança sagrada de ${parentA.name} e ${parentB.name}, nasceu ${child.name} (Geração ${roman}).`);
 
       if (child.legendaryTrait) {

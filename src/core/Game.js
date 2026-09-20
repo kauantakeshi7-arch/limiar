@@ -54,6 +54,31 @@ export class Game {
     this._lastPointerY   = null;
     this._touchDisturbances = [];
 
+    // Cached canvas bounding rect to eliminate DOM reflow queries on pointermove
+    this._rect = null;
+
+    // Reusable render options to eliminate 60 object allocations per second
+    this._renderOptions = {
+      creatures:         null,
+      threshold:         null,
+      particles:         null,
+      ripples:           null,
+      wind:              null,
+      activeNectar:      null,
+      activeSpores:      null,
+      playerCalls:       null,
+      inspectedCreature: null,
+      diurnalFactor:     0,
+      diurnalCycle:      0,
+      reefs:             null,
+      tide:              null,
+      vents:             null,
+      aurora:            null,
+      season:            null,
+      now:               0,
+      dt:                0,
+    };
+
     this._bindInput();
     this._bindUI();
     this._bindSplash();
@@ -168,26 +193,27 @@ export class Game {
         this._ripples.length = newLen;
       }
 
-      this._renderer.render({
-        creatures:         this._world.creatures,
-        threshold:         this._world.threshold,
-        particles:         this._world.particles,
-        ripples:           this._ripples,
-        wind:              this._world.wind,
-        activeNectar:      this._world.activeNectar,
-        activeSpores:      this._world.activeSpores,
-        playerCalls:       this._world.playerCalls,
-        inspectedCreature: this._world.inspectedCreature,
-        diurnalFactor:     this._world.diurnalFactor,
-        diurnalCycle:      this._world.diurnalCycle,
-        reefs:             this._world.reefs,
-        tide:              this._world.tide,
-        vents:             this._world.vents,
-        aurora:            this._world.aurora,
-        season:            this._world.season,
-        now:               timestamp,
-        dt,
-      });
+      const ro = this._renderOptions;
+      ro.creatures         = this._world.creatures;
+      ro.threshold         = this._world.threshold;
+      ro.particles         = this._world.particles;
+      ro.ripples           = this._ripples;
+      ro.wind              = this._world.wind;
+      ro.activeNectar      = this._world.activeNectar;
+      ro.activeSpores      = this._world.activeSpores;
+      ro.playerCalls       = this._world.playerCalls;
+      ro.inspectedCreature = this._world.inspectedCreature;
+      ro.diurnalFactor     = this._world.diurnalFactor;
+      ro.diurnalCycle      = this._world.diurnalCycle;
+      ro.reefs             = this._world.reefs;
+      ro.tide              = this._world.tide;
+      ro.vents             = this._world.vents;
+      ro.aurora            = this._world.aurora;
+      ro.season            = this._world.season;
+      ro.now               = timestamp;
+      ro.dt                = dt;
+
+      this._renderer.render(ro);
     } catch (err) {
       console.error('[Limiar] Loop execution error caught:', err);
     }
@@ -264,7 +290,9 @@ export class Game {
     // Auto-collapse HUD menu when user touches canvas
     this._collapseHud();
 
-    const { x, y } = this._canvasPos(event);
+    this._rect = this._canvas.getBoundingClientRect();
+    const x = event.clientX - this._rect.left;
+    const y = event.clientY - this._rect.top;
     this._activePointers.set(event.pointerId, { x, y });
 
     // Start hold tracking for celestial nectar or cosmic player call
@@ -290,39 +318,49 @@ export class Game {
   }
 
   _onPointerMove(event) {
-    const pos = this._canvasPos(event);
-    if (this._activePointers.has(event.pointerId)) {
-      this._activePointers.set(event.pointerId, pos);
+    if (!this._rect) {
+      this._rect = this._canvas.getBoundingClientRect();
+    }
+    const px = event.clientX - this._rect.left;
+    const py = event.clientY - this._rect.top;
+
+    let pt = this._activePointers.get(event.pointerId);
+    if (pt) {
+      pt.x = px;
+      pt.y = py;
+    } else {
+      pt = { x: px, y: py };
+      this._activePointers.set(event.pointerId, pt);
     }
 
     if (!event.isPrimary) return;
 
     // Cancel hold if moved significantly
     if (this._holdStartPos) {
-      const dist = Math.hypot(pos.x - this._holdStartPos.x, pos.y - this._holdStartPos.y);
+      const dist = Math.hypot(px - this._holdStartPos.x, py - this._holdStartPos.y);
       if (dist > 18) {
         this._holdStartPos = null;
       }
     }
 
     // Interactive membrane flora brushing
-    if (Math.abs(pos.y - this._world.threshold.y) < 52) {
-      this._world.brushFlora(pos.x, pos.y);
+    if (Math.abs(py - this._world.threshold.y) < 52) {
+      this._world.brushFlora(px, py);
     }
 
     // Liquid harp: glide across or along threshold
     const ty = this._world.threshold.y;
     if (this._lastPointerY !== null && !this._world.threshold.isDragging) {
-      const crossed = (this._lastPointerY < ty && pos.y >= ty) ||
-                      (this._lastPointerY > ty && pos.y <= ty) ||
-                      Math.abs(pos.y - ty) < 14;
+      const crossed = (this._lastPointerY < ty && py >= ty) ||
+                      (this._lastPointerY > ty && py <= ty) ||
+                      Math.abs(py - ty) < 14;
       if (crossed) {
-        this._world.pluckHarp(pos.x / this._renderer.width);
+        this._world.pluckHarp(px / this._renderer.width);
       }
     }
-    this._lastPointerY = pos.y;
+    this._lastPointerY = py;
 
-    this._world.threshold.moveDrag(pos.y);
+    this._world.threshold.moveDrag(py);
 
     // Keep audio threshold mix in sync
     const ratio = this._world.threshold.y / this._renderer.height;
@@ -502,6 +540,7 @@ export class Game {
   // ── Resize ────────────────────────────────────────────────────────────────
 
   _onResize() {
+    this._rect = null;
     const { width, height } = this._renderer.resize();
     this._world.onResize(width, height);
   }
@@ -536,10 +575,12 @@ export class Game {
 
   /** Convert a PointerEvent to CSS-pixel canvas coordinates. */
   _canvasPos(event) {
-    const rect = this._canvas.getBoundingClientRect();
+    if (!this._rect) {
+      this._rect = this._canvas.getBoundingClientRect();
+    }
     return {
-      x: (event.clientX - rect.left),
-      y: (event.clientY - rect.top),
+      x: (event.clientX - this._rect.left),
+      y: (event.clientY - this._rect.top),
     };
   }
 }

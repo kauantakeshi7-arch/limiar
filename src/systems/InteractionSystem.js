@@ -17,7 +17,11 @@ import { globalBus, Events } from '../core/EventEmitter.js';
  *   - Explosion:   Both shatter into offspring (smaller variants).
  *   - Symbiosis:   Rare — they bond and move as one.
  */
+const EMPTY_OFFSPRING = Object.freeze([]);
+
 export class InteractionSystem {
+  static EMPTY_OFFSPRING = EMPTY_OFFSPRING;
+
   constructor() {
     this._cellSize = Config.INTERACTION.RADIUS * 2;
     this._interactRadiusSq = Config.INTERACTION.RADIUS * Config.INTERACTION.RADIUS;
@@ -25,7 +29,9 @@ export class InteractionSystem {
     this._grid = new Map();
     this._cellPool = [];
     this._neighborScratch = [];
+    this._offspringScratch = [];
     this._processed = new Set();
+    this._lastPruneTime = 0;
   }
 
   // ── Main update ───────────────────────────────────────────────────────────
@@ -40,7 +46,16 @@ export class InteractionSystem {
   update(creatures, particles, audio, now) {
     this._buildGrid(creatures);
 
-    const offspring = [];
+    // Periodic sweep to prune dead/expired interaction cooldowns on living creatures
+    if (now - this._lastPruneTime > 2000) {
+      this._lastPruneTime = now;
+      for (let i = 0; i < creatures.length; i++) {
+        creatures[i].pruneInteractionCooldowns?.(now);
+      }
+    }
+
+    const offspring = this._offspringScratch;
+    offspring.length = 0;
     this._processed.clear();
 
     for (let i = 0; i < creatures.length; i++) {
@@ -70,7 +85,7 @@ export class InteractionSystem {
       }
     }
 
-    return offspring;
+    return offspring.length === 0 ? EMPTY_OFFSPRING : offspring;
   }
 
   // ── Interaction resolution ────────────────────────────────────────────────
@@ -106,7 +121,7 @@ export class InteractionSystem {
       audio.playSymbiosis(midX, midY);
       globalBus.emit(Events.INTERACTION_SYMBIOSIS, a, b);
     }
-    return [];
+    return EMPTY_OFFSPRING;
   }
 
   _resolveOppositeZone(a, b, particles, audio) {
@@ -124,7 +139,7 @@ export class InteractionSystem {
         b.startDance(a, duration);
         audio.playCourtship?.(midX, midY);
         globalBus.emit(Events.CREATURE_DANCE, a, b);
-        return [];
+        return EMPTY_OFFSPRING;
       }
     }
 
@@ -135,7 +150,7 @@ export class InteractionSystem {
       smaller.isAlive = false;
       particles.emitDissolveBurst(midX, midY, smaller.color);
       globalBus.emit(Events.INTERACTION_ABSORBED, larger, smaller);
-      return [];
+      return EMPTY_OFFSPRING;
     }
 
     // Explosion: roughly same size
@@ -147,7 +162,7 @@ export class InteractionSystem {
       return this._spawnOffspring(a, b, midX, midY);
     }
 
-    return [];
+    return EMPTY_OFFSPRING;
   }
 
   /** Generate offspring from two exploding creatures. */

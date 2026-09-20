@@ -91,6 +91,8 @@ export class InspectCard {
     return this._currentCreature;
   }
 
+  static _ROMAN_GENS = Object.freeze(['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X']);
+
   /**
    * Update card UI with live telemetry of inspected creature.
    * @param {boolean} [force=false]
@@ -107,8 +109,7 @@ export class InspectCard {
     this._lastUpdate = now;
 
     const c = this._currentCreature;
-    const genRomans = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
-    const romanGen = genRomans[Math.min(9, (c.generation || 1) - 1)] || c.generation;
+    const romanGen = InspectCard._ROMAN_GENS[Math.min(9, (c.generation || 1) - 1)] || c.generation;
 
     // Header info (cached DOM references)
     if (this._nameEl) this._nameEl.textContent = c.name;

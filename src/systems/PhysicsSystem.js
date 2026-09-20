@@ -35,6 +35,14 @@ export class PhysicsSystem {
     this.height = height;
     this._processedSymbiotic = new Set();
     this._processedDancing   = new Set();
+
+    // Reusable scratch objects to eliminate per-frame heap allocations during steering
+    this._steerScratch     = { x: 0, y: 0 };
+    this._flockScratch     = { sepX: 0, sepY: 0, cohX: 0, cohY: 0, alignX: 0, alignY: 0 };
+    this._wanderScratch    = { x: 0, y: 0 };
+    this._zoneAttrScratch  = { x: 0, y: 0 };
+    this._boundaryScratch  = { x: 0, y: 0 };
+    this._threshAvScratch  = { x: 0, y: 0 };
   }
 
   onResize(width, height) {
@@ -392,7 +400,9 @@ export class PhysicsSystem {
                  + ventY
                  + auroraY;
 
-    return { x: steerX, y: steerY };
+    this._steerScratch.x = steerX;
+    this._steerScratch.y = steerY;
+    return this._steerScratch;
   }
 
   // ── Individual behaviors ──────────────────────────────────────────────────
@@ -426,7 +436,9 @@ export class PhysicsSystem {
     const fx = cx + tx;
     const fy = cy + ty;
     const fLen = Math.sqrt(fx * fx + fy * fy) || 1;
-    return { x: fx / fLen, y: fy / fLen };
+    this._wanderScratch.x = fx / fLen;
+    this._wanderScratch.y = fy / fLen;
+    return this._wanderScratch;
   }
 
   /**
@@ -538,16 +550,23 @@ export class PhysicsSystem {
       }
     }
 
-    return {
-      sepX, sepY,
-      cohX: cohForceX, cohY: cohForceY,
-      alignX: alignForceX, alignY: alignForceY,
-    };
+    const flock = this._flockScratch;
+    flock.sepX = sepX;
+    flock.sepY = sepY;
+    flock.cohX = cohForceX;
+    flock.cohY = cohForceY;
+    flock.alignX = alignForceX;
+    flock.alignY = alignForceY;
+    return flock;
   }
 
   /** Zone attraction: gentle pull toward home zone altitude (zero-allocation vertical scalar math). */
   _zoneAttraction(creature, threshold) {
-    if (creature.state !== CreatureState.NATIVE) return { x: 0, y: 0 };
+    const s = this._zoneAttrScratch;
+    if (creature.state !== CreatureState.NATIVE) {
+      s.x = 0; s.y = 0;
+      return s;
+    }
 
     // Unique vertical altitude per creature based on DNA adaptation (prevents single-line stacking)
     const depthOffset = creature.dna ? (creature.dna.adaptation - 0.5) * 0.30 : 0;
@@ -558,9 +577,14 @@ export class PhysicsSystem {
     const dy = homeY - creature.position.y;
     const distY = Math.abs(dy);
 
-    if (distY < 40) return { x: 0, y: 0 };
+    if (distY < 40) {
+      s.x = 0; s.y = 0;
+      return s;
+    }
     const scale = Math.min(distY / 220, 1.0);
-    return { x: 0, y: (dy > 0 ? 1 : -1) * scale };
+    s.x = 0;
+    s.y = (dy > 0 ? 1 : -1) * scale;
+    return s;
   }
 
   /**
@@ -605,21 +629,33 @@ export class PhysicsSystem {
       fy += (toCY / d) * 1.8;
     }
 
-    return { x: fx, y: fy };
+    const s = this._boundaryScratch;
+    s.x = fx;
+    s.y = fy;
+    return s;
   }
 
   /** Threshold avoidance: native creatures shy away from the line gently (zero-allocation scalar math). */
   _thresholdAvoidance(creature, threshold) {
-    if (creature.state !== CreatureState.NATIVE) return { x: 0, y: 0 };
+    const s = this._threshAvScratch;
+    if (creature.state !== CreatureState.NATIVE) {
+      s.x = 0; s.y = 0;
+      return s;
+    }
 
     const distToThreshold = creature.position.y - threshold.y;
     const absD = Math.abs(distToThreshold);
     const avoidDist = this.width <= 600 ? 60 : 95;
-    if (absD > avoidDist) return { x: 0, y: 0 };
+    if (absD > avoidDist) {
+      s.x = 0; s.y = 0;
+      return s;
+    }
 
     const direction = distToThreshold > 0 ? 1 : -1;
     const strength  = (1 - absD / avoidDist) * 0.50;
-    return { x: 0, y: direction * strength };
+    s.x = 0;
+    s.y = direction * strength;
+    return s;
   }
 
   // ── Integration ───────────────────────────────────────────────────────────

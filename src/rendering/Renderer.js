@@ -817,7 +817,7 @@ export class Renderer {
 
       ctx.strokeStyle = `rgba(185, 215, 255, ${alpha})`;
       ctx.shadowColor = 'rgba(160, 200, 255, 0.25)';
-      ctx.shadowBlur = 4;
+      ctx.shadowBlur = this._isMobile ? 0 : 4;
       ctx.stroke();
     }
     ctx.setLineDash([]);
@@ -971,7 +971,7 @@ export class Renderer {
       ctx.arc(d.x, d.y, d.radius * pulse, 0, Math.PI * 2);
       ctx.fillStyle = `rgba(240, 248, 255, ${alpha * pulse})`;
       ctx.shadowColor = 'rgba(226, 232, 240, 0.9)';
-      ctx.shadowBlur = 6;
+      ctx.shadowBlur = this._isMobile ? 0 : 6;
       ctx.fill();
     }
     ctx.restore();
@@ -1804,7 +1804,7 @@ export class Renderer {
 
     ctx.save();
     ctx.shadowColor = creature.color.toGlowHSLA();
-    ctx.shadowBlur  = 8;
+    ctx.shadowBlur  = this._isMobile ? 0 : 8;
     const moteFill   = creature.color.toGlowHSLA(0.5);
     ctx.fillStyle   = moteFill;
 
@@ -1913,7 +1913,7 @@ export class Renderer {
       ctx.arc(tailTip.x, tailTip.y, 2.2, 0, Math.PI * 2);
       ctx.fillStyle = creature.color.toGlowHSLA(0.85);
       ctx.shadowColor = creature.color.toGlowHSLA(0.9);
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = this._isMobile ? 0 : 8;
       ctx.fill();
       ctx.shadowBlur = 0;
     }
@@ -1952,7 +1952,7 @@ export class Renderer {
       ctx.arc(last.x, last.y, 1.8, 0, Math.PI * 2);
       ctx.fillStyle = creature.color.toGlowHSLA(0.8);
       ctx.shadowColor = creature.color.toGlowHSLA(0.85);
-      ctx.shadowBlur = 6;
+      ctx.shadowBlur = this._isMobile ? 0 : 6;
       ctx.fill();
       ctx.shadowBlur = 0;
     }

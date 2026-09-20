@@ -25,6 +25,13 @@ export class AudioEngine {
 
     /** Pre-allocated scratch object for zero-allocation depth acoustics. */
     this._depthAcousticsScratch = { freq: 2400, q: 0.70 };
+
+    /** Throttling and state caching for update() (BUG-83) */
+    this._lastEcologyScanTime = -1000;
+    this._cachedSleepRatio    = 0;
+    this._cachedDancingCount  = 0;
+    this._lastFilterCutoff    = -1;
+    this._lastFilterQ         = -1;
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -106,34 +113,50 @@ export class AudioEngine {
     }
 
     // Adaptive ambient modulation based on ecology:
+    // Throttle ecology creature scans to ~10Hz (every 100ms) to avoid looping every frame (BUG-83)
     if (creatures && creatures.length > 0) {
-      let sleepingCount = 0;
-      let dancingCount = 0;
-      let aliveCount = 0;
+      if (now - this._lastEcologyScanTime >= 100) {
+        this._lastEcologyScanTime = now;
+        let sleepingCount = 0;
+        let dancingCount = 0;
+        let aliveCount = 0;
 
-      for (let i = 0; i < creatures.length; i++) {
-        const c = creatures[i];
-        if (c.isAlive) {
-          aliveCount++;
-          if (c.isSleeping) sleepingCount++;
-          if (c.isDancing) dancingCount++;
+        for (let i = 0; i < creatures.length; i++) {
+          const c = creatures[i];
+          if (c.isAlive) {
+            aliveCount++;
+            if (c.isSleeping) sleepingCount++;
+            if (c.isDancing) dancingCount++;
+          }
         }
+
+        this._cachedSleepRatio = aliveCount > 0 ? (sleepingCount / aliveCount) : 0;
+        this._cachedDancingCount = dancingCount;
       }
 
-      if (aliveCount > 0) {
-        const sleepRatio = sleepingCount / aliveCount;
+      if (this._cachedSleepRatio > 0) {
         // Soften and warm filter when world is asleep (lullaby effect)
-        cutoff = cutoff * (1.0 - sleepRatio * 0.32);
+        cutoff = cutoff * (1.0 - this._cachedSleepRatio * 0.32);
+      }
 
-        // Warm drone swell if sacred dance is occurring
-        if (dancingCount > 0) {
-          cutoff += 180;
-        }
+      // Warm drone swell if sacred dance is occurring
+      if (this._cachedDancingCount > 0) {
+        cutoff += 180;
       }
     }
 
-    this._breathFilter.frequency.setTargetAtTime(Math.max(220, cutoff), this._ctx.currentTime, 0.1);
-    this._breathFilter.Q.setTargetAtTime(targetQ, this._ctx.currentTime, 0.2);
+    const clampedCutoff = Math.max(220, cutoff);
+    const audioTime = this._ctx.currentTime;
+
+    // Throttle Web Audio AudioParam ramps: avoid redundant scheduling at 60-120 FPS (BUG-83)
+    if (Math.abs(clampedCutoff - this._lastFilterCutoff) > 2.0) {
+      this._breathFilter.frequency.setTargetAtTime(clampedCutoff, audioTime, 0.1);
+      this._lastFilterCutoff = clampedCutoff;
+    }
+    if (Math.abs(targetQ - this._lastFilterQ) > 0.02) {
+      this._breathFilter.Q.setTargetAtTime(targetQ, audioTime, 0.2);
+      this._lastFilterQ = targetQ;
+    }
   }
 
   /**

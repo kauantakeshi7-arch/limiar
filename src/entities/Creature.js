@@ -55,7 +55,7 @@ export class Creature {
      *            'spiky'  = shadow (irregular, concave pockets + sharp tips)
      */
     this.blobStyle   = zone === Config.ZONE.LIGHT ? 'smooth' : 'spiky';
-    this.blobAngles  = Creature._makeBlobAngles();
+    this.blobAngles  = Creature._STATIC_BLOB_ANGLES;
     this.blobPhases  = Array.from({ length: Config.CREATURE.BLOB_POINTS }, () => Random.float(0, Math.PI * 2));
     this.blobNoise   = new Array(Config.CREATURE.BLOB_POINTS).fill(0);
     /** Secondary harmonic phases for shadow creatures' irregular spikes. */
@@ -625,10 +625,13 @@ export class Creature {
           const dx = joint.x - prevX;
           const dy = joint.y - prevY;
           const dist = Math.hypot(dx, dy) || 0.001;
-          const ang = Math.atan2(dy, dx);
+          const invDist = 1 / dist;
+          const nx = dx * invDist;
+          const ny = dy * invDist;
 
-          joint.x = prevX + (dx / dist) * jointSpacing + Math.cos(ang + Math.PI / 2) * wave * 0.12;
-          joint.y = prevY + (dy / dist) * jointSpacing + Math.sin(ang + Math.PI / 2) * wave * 0.12;
+          // Normal perpendicular (-ny, nx) avoids Math.atan2, Math.cos, and Math.sin
+          joint.x = prevX + nx * jointSpacing - ny * wave * 0.12;
+          joint.y = prevY + ny * jointSpacing + nx * wave * 0.12;
           prevX = joint.x;
           prevY = joint.y;
         }
@@ -725,12 +728,27 @@ export class Creature {
     this.refreshTargetColor();
   }
 
+  /**
+   * Prune expired interaction cooldown entries to prevent unbounded memory growth.
+   * @param {number} now
+   */
+  pruneInteractionCooldowns(now) {
+    if (this.interactionCooldowns.size === 0) return;
+    for (const [id, expireTime] of this.interactionCooldowns) {
+      if (now > expireTime) {
+        this.interactionCooldowns.delete(id);
+      }
+    }
+  }
+
   // ── Statics ────────────────────────────────────────────────────────────────
 
+  static _STATIC_BLOB_ANGLES = Object.freeze(
+    Array.from({ length: Config.CREATURE.BLOB_POINTS }, (_, i) => (i / Config.CREATURE.BLOB_POINTS) * Math.PI * 2)
+  );
+
   static _makeBlobAngles() {
-    const n = Config.CREATURE.BLOB_POINTS;
-    // Shadow creatures get slightly randomized angle offsets for irregular silhouette
-    return Array.from({ length: n }, (_, i) => (i / n) * Math.PI * 2);
+    return Creature._STATIC_BLOB_ANGLES;
   }
 
   static _baseColorForZone(zone) {
