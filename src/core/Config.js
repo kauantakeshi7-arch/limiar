@@ -212,6 +212,9 @@ export const Config = Object.freeze({
     CALL_HARMONY_MS: 28,
     NECTAR_CONDENSE_MS: 40,
     SNAP_CAPTURE_MS: 35,
+    SANCTUARY_SEED_MS: 45,
+    CONSTELLATION_WEAVE_MS: 30,
+    GRACE_BLESS_MS: 40,
   }),
 
   // ── Zen Bioluminescence & Quorum Sensing ──────────────────────────────────

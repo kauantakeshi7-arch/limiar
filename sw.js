@@ -3,7 +3,7 @@
  * Suporte completo para PWA, instalação no celular e jogabilidade 100% offline.
  */
 
-const CACHE_NAME = 'limiar-cache-v1';
+const CACHE_NAME = 'limiar-cache-v2';
 
 const PRECACHE_ASSETS = [
   './',
@@ -23,16 +23,19 @@ const PRECACHE_ASSETS = [
   './src/rendering/Renderer.js',
   './src/systems/DecisionSystem.js',
   './src/systems/EvolutionSystem.js',
+  './src/systems/GraceSystem.js',
   './src/systems/InteractionSystem.js',
   './src/systems/PhysicsSystem.js',
   './src/systems/SpawnSystem.js',
   './src/ui/Bestiary.js',
   './src/ui/Diary.js',
+  './src/ui/GraceMandala.js',
   './src/ui/InspectCard.js',
   './src/ui/PWAInstaller.js',
   './src/utils/Color.js',
   './src/utils/Random.js',
   './src/utils/Vector2.js',
+  './src/utils/WakeLock.js',
   './src/world/Threshold.js',
   './src/world/World.js'
 ];
@@ -65,29 +68,39 @@ self.addEventListener('fetch', (event) => {
   if (!url.protocol.startsWith('http')) return;
 
   event.respondWith(
-    fetch(event.request)
-      .then((networkResponse) => {
-        // Se resposta válida, atualiza o cache em segundo plano
-        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-        }
-        return networkResponse;
-      })
-      .catch(() => {
-        // Modo Offline: recupera do cache
-        return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
+    caches.match(event.request).then((cachedResponse) => {
+      // Revalidação em segundo plano (Stale-While-Revalidate)
+      const fetchPromise = fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200 && (networkResponse.type === 'basic' || networkResponse.type === 'cors')) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
           }
-          // Fallback para página inicial se for navegação
+          return networkResponse;
+        })
+        .catch(() => {
+          // Erro de rede em background é silencioso se já houver cache
           if (event.request.mode === 'navigate') {
             return caches.match('./index.html');
           }
-          return new Response('Offline', { status: 503, statusText: 'Offline' });
+          return null;
         });
-      })
+
+      // Se temos o recurso em cache, entrega imediatamente (0ms latency, 100% offline-first)
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+
+      // Se não está no cache, aguarda a resposta da rede
+      return fetchPromise.then((networkResponse) => {
+        if (networkResponse) return networkResponse;
+        if (event.request.mode === 'navigate') {
+          return caches.match('./index.html');
+        }
+        return new Response('Offline', { status: 503, statusText: 'Offline' });
+      });
+    })
   );
 });

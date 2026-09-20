@@ -189,7 +189,7 @@ export class Game {
             const planted = this._world.plantSanctuary(this._holdStartPos.x, this._holdStartPos.y);
             if (planted) {
               this._sanctuaryPlanted = true;
-              this._vibrate(45);
+              this._vibrate(Config.HAPTICS?.SANCTUARY_SEED_MS || 45);
             }
           }
         }
@@ -405,7 +405,7 @@ export class Game {
       if (targetCreature && targetCreature !== this._dragCreature && targetCreature.isAlive) {
         this._world.addConstellation(this._dragCreature, targetCreature);
         this._dragCreature = targetCreature; // chain to next creature
-        this._vibrate(Config.HAPTICS?.CALL_HARMONY_MS || 28);
+        this._vibrate(Config.HAPTICS?.CONSTELLATION_WEAVE_MS || 30);
       }
     }
 

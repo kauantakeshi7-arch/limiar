@@ -139,7 +139,8 @@ export class GraceMandala {
     const success = this._world.grace.cast(blessingId);
     if (success) {
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        try { navigator.vibrate([12, 35, 12]); } catch (_) {}
+        const ms = Config.HAPTICS?.GRACE_BLESS_MS || 40;
+        try { navigator.vibrate([12, ms, 12]); } catch (_) {}
       }
       this.updateDisplay();
     }
