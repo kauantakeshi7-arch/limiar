@@ -541,13 +541,15 @@ export class Renderer {
       const alpha   = Math.min(1, s.alpha * twinkle * base);
       if (alpha < 0.01) continue;
 
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = s.rgbString;
       ctx.beginPath();
       ctx.arc(sx, sy, s.size, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(${s.r},${s.g},${s.b},${alpha})`;
       ctx.fill();
 
       if (s.size > 1.4 && alpha > 0.25) {
-        ctx.strokeStyle = `rgba(${s.r},${s.g},${s.b},${alpha * 0.4})`;
+        ctx.globalAlpha = alpha * 0.4;
+        ctx.strokeStyle = s.rgbString;
         ctx.lineWidth = 0.5;
         const len = s.size * (2 + nightIntensity);
         ctx.beginPath();
@@ -584,8 +586,9 @@ export class Renderer {
           ctx.strokeStyle = grad;
           ctx.lineWidth   = 1.5;
           ctx.shadowColor = 'rgba(230, 190, 255, 0.9)';
-          ctx.shadowBlur  = 8;
+          ctx.shadowBlur  = this._isMobile ? 0 : 8;
           ctx.stroke();
+          ctx.shadowBlur  = 0;
         }
       }
     }
@@ -739,7 +742,14 @@ export class Renderer {
       }
     }
     this._ambient.length = writeIdx;
-    if (this._ambient.length > 320) this._ambient.splice(0, 60);
+    if (this._ambient.length > 320) {
+      const drop = 60;
+      const newLen = this._ambient.length - drop;
+      for (let i = 0; i < newLen; i++) {
+        this._ambient[i] = this._ambient[i + drop];
+      }
+      this._ambient.length = newLen;
+    }
   }
 
   _drawAmbient(ctx) {
@@ -1025,7 +1035,7 @@ export class Renderer {
     ctx.strokeStyle = `rgba(${fcR}, ${fcG}, ${fcB}, ${0.25 + pulse * 0.1 + tensionGlow * 0.2})`;
     ctx.lineWidth   = 4 + tensionGlow * 1.5;
     ctx.shadowColor = tension > 1.5 ? `rgba(${ccR}, ${ccG}, ${ccB}, 1)` : `rgba(${fcR}, ${fcG}, ${fcB}, 0.9)`;
-    ctx.shadowBlur  = 22 + tension * 8;
+    ctx.shadowBlur  = this._isMobile ? 0 : 22 + tension * 8;
     ctx.stroke();
 
     // Core line
@@ -1036,8 +1046,9 @@ export class Renderer {
     }
     ctx.strokeStyle = `rgba(${ccR}, ${ccG}, ${ccB}, ${0.55 + pulse * 0.2 + tensionGlow * 0.25})`;
     ctx.lineWidth   = 1.2 + tensionGlow * 0.6;
-    ctx.shadowBlur  = 6 + tensionGlow * 4;
+    ctx.shadowBlur  = this._isMobile ? 0 : 6 + tensionGlow * 4;
     ctx.stroke();
+    ctx.shadowBlur  = 0;
 
     // Electric tension micro-sparkles along the line when tension is notable
     if (tension > 0.8) {
@@ -1148,8 +1159,9 @@ export class Renderer {
       ctx.arc(endX, endY, budR, 0, Math.PI * 2);
       ctx.fillStyle = tipColor;
       ctx.shadowColor = glowColor;
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = this._isMobile ? 0 : 8;
       ctx.fill();
+      ctx.shadowBlur = 0;
 
       // Delicate halo around bud
       ctx.beginPath();
@@ -1175,8 +1187,9 @@ export class Renderer {
       ctx.arc(px, py + (seed - 0.5) * 6, sparkR, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(255, 230, 255, 0.85)';
       ctx.shadowColor = 'rgba(210, 150, 255, 1)';
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = this._isMobile ? 0 : 10;
       ctx.fill();
+      ctx.shadowBlur = 0;
     }
     ctx.restore();
   }
@@ -1287,8 +1300,9 @@ export class Renderer {
       ctx.strokeStyle = 'rgba(255, 225, 140, 0.7)';
       ctx.lineWidth = 1.6;
       ctx.shadowColor = 'rgba(255, 215, 110, 0.9)';
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = this._isMobile ? 0 : 10;
       ctx.stroke();
+      ctx.shadowBlur = 0;
 
       // 2. Amethyst ribbon
       ctx.beginPath();
@@ -1302,8 +1316,9 @@ export class Renderer {
       ctx.strokeStyle = 'rgba(200, 145, 255, 0.7)';
       ctx.lineWidth = 1.6;
       ctx.shadowColor = 'rgba(180, 115, 255, 0.9)';
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = this._isMobile ? 0 : 10;
       ctx.stroke();
+      ctx.shadowBlur = 0;
     }
     ctx.restore();
   }
@@ -1373,8 +1388,9 @@ export class Renderer {
     ctx.strokeStyle = `rgba(240, 200, 255, ${0.45 + pulse * 0.25})`;
     ctx.lineWidth   = 1;
     ctx.shadowColor = 'rgba(220, 170, 255, 0.7)';
-    ctx.shadowBlur  = 8;
+    ctx.shadowBlur  = this._isMobile ? 0 : 8;
     ctx.stroke();
+    ctx.shadowBlur  = 0;
   }
 
   // ── 8. Dissolution echoes ─────────────────────────────────────────────────
@@ -1442,7 +1458,7 @@ export class Renderer {
         ctx.quadraticCurveTo(trail[j].x, trail[j].y, xc, yc);
       }
       ctx.lineTo(trail[n - 1].x, trail[n - 1].y);
-      ctx.strokeStyle = c.color.toHSLAWithAlpha(0.20);
+      ctx.strokeStyle = c.trailHSLA;
       ctx.lineWidth   = Math.max(0.7, c.radius * 0.38);
       ctx.stroke();
     }
@@ -1509,7 +1525,7 @@ export class Renderer {
     ctx.arc(x, cy, dropR, 0, Math.PI * 2);
     ctx.fillStyle = dropG;
     ctx.shadowColor = 'rgba(251, 191, 36, 0.9)';
-    ctx.shadowBlur = 14;
+    ctx.shadowBlur = this._isMobile ? 0 : 14;
     ctx.fill();
 
     // Specular shine
@@ -1529,7 +1545,7 @@ export class Renderer {
       ctx.arc(ox, oy, 1.8, 0, Math.PI * 2);
       ctx.fillStyle = '#fffbeb';
       ctx.shadowColor = '#f59e0b';
-      ctx.shadowBlur = 6;
+      ctx.shadowBlur = this._isMobile ? 0 : 6;
       ctx.fill();
     }
 
@@ -1556,9 +1572,6 @@ export class Renderer {
   }
 
   _drawCreature(ctx, creature, now, breath = 0.5, dt = 16) {
-    const pts = creature.getBlobPoints(now);
-    if (pts.length < 3) return;
-
     ctx.save();
     try {
       const ontogenyAlpha = creature.growthProgress !== undefined
@@ -1586,19 +1599,23 @@ export class Renderer {
           this._drawCrystal(ctx, creature, now, breath);
           break;
         case Config.BODY_PLAN.BLOB:
-        default:
-          ctx.beginPath();
-          this._blobPath(ctx, pts);
-          ctx.fillStyle = this._creatureGrad(ctx, creature);
-          ctx.fill();
+        default: {
+          const pts = creature.getBlobPoints(now);
+          if (pts.length >= 3) {
+            ctx.beginPath();
+            this._blobPath(ctx, pts);
+            ctx.fillStyle = this._creatureGrad(ctx, creature);
+            ctx.fill();
 
-          ctx.strokeStyle = creature.color.toGlowHSLAWithAlpha(0.3, 0.4);
-          ctx.lineWidth   = 0.8;
-          ctx.shadowBlur  = 0;
-          ctx.stroke();
+            ctx.strokeStyle = creature.color.toGlowHSLAWithAlpha(0.3, 0.4);
+            ctx.lineWidth   = 0.8;
+            ctx.shadowBlur  = 0;
+            ctx.stroke();
 
-          this._drawSpecular(ctx, creature);
+            this._drawSpecular(ctx, creature);
+          }
           break;
+        }
       }
 
       // Conscious Sensory Organelles / Gaze
@@ -1630,7 +1647,6 @@ export class Renderer {
       // Metabolic absorption flash
       if (creature.metabolicFlash > 0.01) {
         this._drawMetabolicPulse(ctx, creature);
-        creature.metabolicFlash = Math.max(0, creature.metabolicFlash - dt * 0.0032);
       }
 
       // Legendary Visual Mutations
@@ -1665,7 +1681,7 @@ export class Renderer {
       : `rgba(215, 160, 255, ${flash * 0.85})`;
     ctx.lineWidth = Math.max(0.5, 1.4 * flash);
     ctx.shadowColor = ctx.strokeStyle;
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = this._isMobile ? 0 : 10;
     ctx.stroke();
     ctx.restore();
   }
@@ -1697,7 +1713,7 @@ export class Renderer {
     ctx.lineWidth = 1.0;
     ctx.setLineDash([4, 5]);
     ctx.shadowColor = isLight ? 'rgba(255, 220, 130, 0.6)' : 'rgba(180, 135, 255, 0.6)';
-    ctx.shadowBlur = 6;
+    ctx.shadowBlur = this._isMobile ? 0 : 6;
     ctx.stroke();
     ctx.setLineDash([]);
 
@@ -1727,7 +1743,7 @@ export class Renderer {
       : `rgba(215, 185, 255, ${0.28 + pulse * 0.16})`;
     ctx.lineWidth = 1.0;
     ctx.shadowColor = ctx.strokeStyle;
-    ctx.shadowBlur = 12 + pulse * 6;
+    ctx.shadowBlur = this._isMobile ? 0 : 12 + pulse * 6;
     ctx.stroke();
 
     // 2. Crown of 4 orbiting celestial micro-stars
@@ -1747,7 +1763,7 @@ export class Renderer {
         ? `rgba(255, 248, 220, ${0.75 * starPulse})`
         : `rgba(235, 220, 255, ${0.75 * starPulse})`;
       ctx.shadowColor = ctx.fillStyle;
-      ctx.shadowBlur = 6;
+      ctx.shadowBlur = this._isMobile ? 0 : 6;
       ctx.fill();
     }
     ctx.restore();
@@ -2088,7 +2104,7 @@ export class Renderer {
     ctx.closePath();
     ctx.fillStyle = creature.color.toGlowHSLAWithAlpha(0.6, 0.5);
     ctx.shadowColor = creature.color.toGlowHSLA(0.8);
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = this._isMobile ? 0 : 10;
     ctx.fill();
     ctx.shadowBlur = 0;
 
@@ -2186,15 +2202,16 @@ export class Renderer {
     ctx.arc(creature.position.x, creature.position.y, r * (1.5 + pulse * 0.5), 0, Math.PI * 2);
     ctx.strokeStyle = `rgba(255,255,255,${0.14 + pulse * 0.1})`;
     ctx.lineWidth   = 1;
-    ctx.shadowBlur  = 15;
+    ctx.shadowBlur  = this._isMobile ? 0 : 15;
     ctx.shadowColor = 'white';
     ctx.stroke();
 
     ctx.beginPath();
     ctx.arc(creature.position.x, creature.position.y, r, 0, Math.PI * 2);
     ctx.fillStyle  = `rgba(255,255,255,${0.7 + pulse * 0.3})`;
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = this._isMobile ? 0 : 20;
     ctx.fill();
+    ctx.shadowBlur = 0;
   }
 
   _drawTranscendentHalo(ctx, creature, now) {
@@ -2234,8 +2251,9 @@ export class Renderer {
       ctx.strokeStyle = 'rgba(255,248,150,1)';
       ctx.lineWidth   = 1.5;
       ctx.shadowColor = 'rgba(255,248,150,1)';
-      ctx.shadowBlur  = 12;
+      ctx.shadowBlur  = this._isMobile ? 0 : 12;
       ctx.stroke();
+      ctx.shadowBlur  = 0;
     }
     ctx.restore();
   }
@@ -2366,7 +2384,7 @@ export class Renderer {
     ctx.arc(moonX, moonY, moonR, 0, Math.PI * 2);
     ctx.fillStyle = `rgba(2, 0, 10, ${t * 0.97})`;
     ctx.shadowColor = 'rgba(180, 130, 255, 0.8)';
-    ctx.shadowBlur  = 30;
+    ctx.shadowBlur  = this._isMobile ? 0 : 30;
     ctx.fill();
 
     // Silver rim
@@ -2374,8 +2392,9 @@ export class Renderer {
     ctx.arc(moonX, moonY, moonR, 0, Math.PI * 2);
     ctx.strokeStyle = `rgba(210, 175, 255, ${t * 0.75})`;
     ctx.lineWidth   = 1.5;
-    ctx.shadowBlur  = 20;
+    ctx.shadowBlur  = this._isMobile ? 0 : 20;
     ctx.stroke();
+    ctx.shadowBlur  = 0;
 
     // Subtle craters (fixed random circles on the moon face)
     ctx.save();
@@ -2480,6 +2499,7 @@ export class Renderer {
         twinkle: rng.float(0, Math.PI * 2),
         twinkleSpeed: rng.float(0.0003, 0.002),
         r, g, b,
+        rgbString: `rgb(${r},${g},${b})`,
       };
     });
   }

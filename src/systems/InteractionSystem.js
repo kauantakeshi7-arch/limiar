@@ -23,6 +23,7 @@ export class InteractionSystem {
     this._interactRadiusSq = Config.INTERACTION.RADIUS * Config.INTERACTION.RADIUS;
     /** @type {Map<number, Creature[]>} */
     this._grid = new Map();
+    this._cellPool = [];
     this._neighborScratch = [];
     this._processed = new Set();
   }
@@ -159,10 +160,12 @@ export class InteractionSystem {
       const dna    = parent.dna.mutate(0.2);
       const zone   = parent.originZone;
       const angle  = (i / count) * Math.PI * 2 + Random.float(-0.5, 0.5);
-      const offset = Vector2.fromAngle(angle, parent.radius * 2);
+      const dist   = parent.radius * 2;
+      const babyX  = x + Math.cos(angle) * dist;
+      const babyY  = y + Math.sin(angle) * dist;
 
       const baby = new Creature({
-        position: new Vector2(x + offset.x, y + offset.y),
+        position: new Vector2(babyX, babyY),
         zone,
         dna,
       });
@@ -177,14 +180,19 @@ export class InteractionSystem {
   // ── Spatial grid ──────────────────────────────────────────────────────────
 
   _buildGrid(creatures) {
+    for (const cell of this._grid.values()) {
+      cell.length = 0;
+      this._cellPool.push(cell);
+    }
     this._grid.clear();
+
     for (let i = 0; i < creatures.length; i++) {
       const c = creatures[i];
       if (!c.isAlive) continue;
       const key = this._cellKey(c.position.x, c.position.y);
       let cell = this._grid.get(key);
       if (!cell) {
-        cell = [];
+        cell = this._cellPool.length > 0 ? this._cellPool.pop() : [];
         this._grid.set(key, cell);
       }
       cell.push(c);

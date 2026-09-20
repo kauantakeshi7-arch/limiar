@@ -66,6 +66,10 @@ export class Creature {
     // ── Visuals ─────────────────────────────────────────────────────────────
     this.color       = Creature._baseColorForZone(zone).clone();
     this.targetColor = this.color.clone();
+    this._cachedColorH = this.color.h;
+    this._cachedColorS = this.color.s;
+    this._cachedColorL = this.color.l;
+    this._trailHSLA    = this.color.toHSLAWithAlpha(0.20);
 
     // ── Motion trail ─────────────────────────────────────────────────────────
     /** Array of { x, y } — most recent last. Capped at TRAIL_LENGTH. */
@@ -146,6 +150,7 @@ export class Creature {
     /** @type {'cruise'|'forage'|'flee'|'court'|'play'|'rest'} */
     this.decision        = 'cruise';
     this.decisionTarget  = null;
+    this._decisionTargetScratch = { x: 0, y: 0 };
     this.decisionTimer   = Random.float(0, 160); // staggered AI evaluation
     this.decisionLockMs  = 0;
 
@@ -344,6 +349,18 @@ export class Creature {
   /** Read-only trail positions (oldest first). */
   get trail() { return this._trail; }
 
+  /** Cached HSLA stroke style for trails (0.20 alpha), recomputed only on color change. */
+  get trailHSLA() {
+    const cur = this.color;
+    if (this._cachedColorH !== cur.h || this._cachedColorS !== cur.s || this._cachedColorL !== cur.l) {
+      this._cachedColorH = cur.h;
+      this._cachedColorS = cur.s;
+      this._cachedColorL = cur.l;
+      this._trailHSLA    = cur.toHSLAWithAlpha(0.20);
+    }
+    return this._trailHSLA;
+  }
+
   // ── Zone helpers ──────────────────────────────────────────────────────────
 
   get isInHomeZone() { return this.zone === this.originZone; }
@@ -505,8 +522,9 @@ export class Creature {
    * @param {Creature[]} [allCreatures]
    */
   updateKinematics(dt, time, allCreatures = []) {
-    // 0. Advance age, ontogeny & zen bioluminescence
+    // 0. Advance age, ontogeny, metabolic flash & zen bioluminescence
     this.age += dt;
+    if (this.metabolicFlash > 0) this.metabolicFlash = Math.max(0, this.metabolicFlash - dt * 0.0032);
     if (this.lightEchoCooldown > 0) this.lightEchoCooldown = Math.max(0, this.lightEchoCooldown - dt);
     if (this.glowIntensity > 0) this.glowIntensity = Math.max(0, this.glowIntensity - dt * 0.00085);
 
@@ -568,48 +586,52 @@ export class Creature {
     this.pulsePhase += dt * (0.0022 + speed * 0.002);
 
     // 3. Articulated segments (Verlet chain) for Serpentine & Manta tail
-    const numSegs = Math.min(this.segments.length, this.dna.segmentCount + 2);
-    this.segments[0].x = this.position.x;
-    this.segments[0].y = this.position.y;
-    this.segments[0].angle = this.facingAngle;
-    this.segments[0].radius = this.radius;
+    if (this.bodyPlan === Config.BODY_PLAN.SERPENTINE || this.bodyPlan === Config.BODY_PLAN.MANTA) {
+      const numSegs = Math.min(this.segments.length, this.dna.segmentCount + 2);
+      this.segments[0].x = this.position.x;
+      this.segments[0].y = this.position.y;
+      this.segments[0].angle = this.facingAngle;
+      this.segments[0].radius = this.radius;
 
-    const segSpacing = this.radius * 0.68;
-    for (let i = 1; i < numSegs; i++) {
-      const prev = this.segments[i - 1];
-      const curr = this.segments[i];
-      const dx   = curr.x - prev.x;
-      const dy   = curr.y - prev.y;
-      const dist = Math.hypot(dx, dy) || 0.001;
-      const angle = Math.atan2(dy, dx);
-      curr.x = prev.x + (dx / dist) * segSpacing;
-      curr.y = prev.y + (dy / dist) * segSpacing;
-      curr.angle = angle;
-      curr.radius = this.radius * Math.max(0.2, 1 - (i / numSegs) * 0.7);
+      const segSpacing = this.radius * 0.68;
+      for (let i = 1; i < numSegs; i++) {
+        const prev = this.segments[i - 1];
+        const curr = this.segments[i];
+        const dx   = curr.x - prev.x;
+        const dy   = curr.y - prev.y;
+        const dist = Math.hypot(dx, dy) || 0.001;
+        const angle = Math.atan2(dy, dx);
+        curr.x = prev.x + (dx / dist) * segSpacing;
+        curr.y = prev.y + (dy / dist) * segSpacing;
+        curr.angle = angle;
+        curr.radius = this.radius * Math.max(0.2, 1 - (i / numSegs) * 0.7);
+      }
     }
 
     // 4. Trailing tentacles for Jellyfish
-    const numTentacles = this.dna.tentacleCount;
-    for (let t = 0; t < numTentacles; t++) {
-      const spread = (t / (numTentacles - 1 || 1) - 0.5) * 1.3;
-      const baseAngle = this.facingAngle + Math.PI + spread;
-      let prevX = this.position.x + Math.cos(baseAngle) * this.radius * 0.65;
-      let prevY = this.position.y + Math.sin(baseAngle) * this.radius * 0.65;
-      const tent = this.tentacles[t];
+    if (this.bodyPlan === Config.BODY_PLAN.JELLYFISH) {
+      const numTentacles = this.dna.tentacleCount;
+      for (let t = 0; t < numTentacles; t++) {
+        const spread = (t / (numTentacles - 1 || 1) - 0.5) * 1.3;
+        const baseAngle = this.facingAngle + Math.PI + spread;
+        let prevX = this.position.x + Math.cos(baseAngle) * this.radius * 0.65;
+        let prevY = this.position.y + Math.sin(baseAngle) * this.radius * 0.65;
+        const tent = this.tentacles[t];
 
-      const jointSpacing = this.radius * 0.52;
-      for (let j = 0; j < tent.length; j++) {
-        const joint = tent[j];
-        const wave = Math.sin(time * 0.0032 + j * 0.7 + joint.phase) * (2.0 + j * 0.8);
-        const dx = joint.x - prevX;
-        const dy = joint.y - prevY;
-        const dist = Math.hypot(dx, dy) || 0.001;
-        const ang = Math.atan2(dy, dx);
+        const jointSpacing = this.radius * 0.52;
+        for (let j = 0; j < tent.length; j++) {
+          const joint = tent[j];
+          const wave = Math.sin(time * 0.0032 + j * 0.7 + joint.phase) * (2.0 + j * 0.8);
+          const dx = joint.x - prevX;
+          const dy = joint.y - prevY;
+          const dist = Math.hypot(dx, dy) || 0.001;
+          const ang = Math.atan2(dy, dx);
 
-        joint.x = prevX + (dx / dist) * jointSpacing + Math.cos(ang + Math.PI / 2) * wave * 0.12;
-        joint.y = prevY + (dy / dist) * jointSpacing + Math.sin(ang + Math.PI / 2) * wave * 0.12;
-        prevX = joint.x;
-        prevY = joint.y;
+          joint.x = prevX + (dx / dist) * jointSpacing + Math.cos(ang + Math.PI / 2) * wave * 0.12;
+          joint.y = prevY + (dy / dist) * jointSpacing + Math.sin(ang + Math.PI / 2) * wave * 0.12;
+          prevX = joint.x;
+          prevY = joint.y;
+        }
       }
     }
   }

@@ -9,6 +9,7 @@ export class Diary {
     /** @type {{ timestamp: Date, text: string }[]} */
     this._entries = [];
     this._element = document.getElementById('diary-entries');
+    this._saveTimer = null;
     this._loadFromStorage();
   }
 
@@ -26,6 +27,15 @@ export class Diary {
       this._entries.pop();
     }
     this._renderLatest(entry, true);
+    this._scheduleSave();
+  }
+
+  /** Flush any pending debounced save immediately. */
+  flushSave() {
+    if (this._saveTimer) {
+      clearTimeout(this._saveTimer);
+      this._saveTimer = null;
+    }
     this._saveToStorage();
   }
 
@@ -49,6 +59,14 @@ export class Diary {
         }
       }
     } catch (_) {}
+  }
+
+  _scheduleSave() {
+    if (this._saveTimer) return;
+    this._saveTimer = setTimeout(() => {
+      this._saveTimer = null;
+      this._saveToStorage();
+    }, 600);
   }
 
   _saveToStorage() {

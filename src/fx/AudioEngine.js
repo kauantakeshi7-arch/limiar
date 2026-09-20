@@ -22,6 +22,9 @@ export class AudioEngine {
     // Pentatonic scale frequencies (Hz) in two octaves
     this._lightNotes  = [261.6, 293.7, 329.6, 392.0, 440.0, 523.3, 587.3]; // C major pent
     this._shadowNotes = [138.6, 155.6, 185.0, 207.7, 233.1, 277.2, 311.1]; // C minor pent (lower)
+
+    /** Pre-allocated scratch object for zero-allocation depth acoustics. */
+    this._depthAcousticsScratch = { freq: 2400, q: 0.70 };
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -162,7 +165,8 @@ export class AudioEngine {
     osc.start(now);
     gain.gain.setValueAtTime(0.028, now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
-    setTimeout(() => { try { osc.stop(); } catch (_) {} }, 1300);
+    osc.stop(now + 1.25);
+    this._cleanupOnEnded(osc, gain, filter, panner);
   }
 
   /**
@@ -429,17 +433,13 @@ export class AudioEngine {
     const node = this._creatureNodes.get(creatureId);
     if (!node) return;
 
-    const { osc, gain } = node;
-    gain.gain.linearRampToValueAtTime(0, this._ctx.currentTime + 1.5);
-    setTimeout(() => {
-      try {
-        osc.stop();
-        osc.disconnect();
-        gain.disconnect();
-        node.filter?.disconnect();
-        node.panner?.disconnect();
-      } catch (_) {}
-    }, 1600);
+    const { osc, gain, filter, panner } = node;
+    const stopTime = this._ctx.currentTime + 1.5;
+    gain.gain.linearRampToValueAtTime(0, stopTime);
+    this._cleanupOnEnded(osc, gain, filter, panner);
+    try {
+      osc.stop(stopTime);
+    } catch (_) {}
 
     this._creatureNodes.delete(creatureId);
   }
@@ -469,10 +469,13 @@ export class AudioEngine {
 
     // 2. Abyssal Hydroacoustic Depth Filter
     if (node.filter && this._ctx) {
-      const { freq, q } = this._computeDepthAcoustics(yRatio);
-      const now = this._ctx.currentTime;
-      node.filter.frequency.setTargetAtTime(freq, now, 0.12);
-      node.filter.Q.setTargetAtTime(q, now, 0.12);
+      if (node.lastYRatio === undefined || Math.abs(yRatio - node.lastYRatio) > 0.005) {
+        node.lastYRatio = yRatio;
+        const ac = this._computeDepthAcoustics(yRatio);
+        const now = this._ctx.currentTime;
+        node.filter.frequency.setTargetAtTime(ac.freq, now, 0.12);
+        node.filter.Q.setTargetAtTime(ac.q, now, 0.12);
+      }
     }
   }
 
@@ -671,24 +674,25 @@ export class AudioEngine {
    */
   _computeDepthAcoustics(yRatio = 0.5) {
     const y = yRatio > 1.0 ? Math.min(1, Math.max(0, yRatio / 800)) : Math.min(1, Math.max(0, yRatio));
+    const s = this._depthAcousticsScratch;
 
     if (y < 0.45) {
       // Light Realm: Open, crystalline, high harmonic air
       const normY = y / 0.45;
-      const freq = 2400 + (1.0 - normY) * 2400; // 2400 to 4800 Hz
-      return { freq, q: 0.70 };
+      s.freq = 2400 + (1.0 - normY) * 2400; // 2400 to 4800 Hz
+      s.q = 0.70;
     } else if (y <= 0.55) {
       // Threshold Transition Membrane
       const normY = (y - 0.45) / 0.10;
-      const freq = 2200 - normY * 400; // 2200 to 1800 Hz
-      return { freq, q: 0.85 };
+      s.freq = 2200 - normY * 400; // 2200 to 1800 Hz
+      s.q = 0.85;
     } else {
       // Shadow Realm: Dense abyssal waters, heavy high-frequency absorption & resonant depth
       const depth = (y - 0.55) / 0.45; // 0.0 to 1.0
-      const freq = Math.max(280, 1600 - depth * 1280); // 1600 down to 320 Hz
-      const q = 0.90 + depth * 0.75; // 0.90 to 1.65
-      return { freq, q };
+      s.freq = Math.max(280, 1600 - depth * 1280); // 1600 down to 320 Hz
+      s.q = 0.90 + depth * 0.75; // 0.90 to 1.65
     }
+    return s;
   }
 
   /**

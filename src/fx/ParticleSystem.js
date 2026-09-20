@@ -25,14 +25,24 @@ export class Particle {
   }
 
   /** Reset and activate this particle for reuse from the pool. */
-  init({ x, y, vx, vy, radius, color, lifespan, fadeStart, gravity }) {
+  init({ x, y, vx, vy, radius, color, h, s, l, a, lifespan, fadeStart, gravity }) {
     this.active    = true;
     this.x         = x;
     this.y         = y;
     this.vx        = vx   ?? 0;
     this.vy        = vy   ?? 0;
     this.radius    = radius ?? 2;
-    this.color     = color ?? new Color(0, 0, 100);
+    if (color) {
+      this.color.h = color.h;
+      this.color.s = color.s;
+      this.color.l = color.l;
+      this.color.a = a !== undefined ? a : (color.a ?? 1);
+    } else {
+      this.color.h = h ?? 0;
+      this.color.s = s ?? 0;
+      this.color.l = l ?? 100;
+      this.color.a = a ?? 1;
+    }
     this.hsla      = this.color.toHSLA();
     this.alpha     = 1;
     this.life      = 1;
@@ -116,7 +126,7 @@ export class ParticleSystem {
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         radius: Random.float(1.5, 4),
-        color: color.withAlpha(0.85),
+        color, a: 0.85,
         lifespan: Random.float(800, 2000),
         fadeStart: 0.5,
         gravity: -0.003,
@@ -135,7 +145,7 @@ export class ParticleSystem {
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed - 0.5,
         radius: Random.float(1, 3.5),
-        color: color.withAlpha(0.6),
+        color, a: 0.6,
         lifespan: Random.float(1200, 2800),
         fadeStart: 0.7,
         gravity: 0.001,
@@ -154,7 +164,7 @@ export class ParticleSystem {
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         radius: Random.float(2, 6),
-        color: Color.transcendent().withAlpha(0.9),
+        h: 50, s: 95, l: 85, a: 0.9,
         lifespan: Random.float(1500, 3500),
         fadeStart: 0.6,
         gravity: -0.004,
@@ -174,7 +184,7 @@ export class ParticleSystem {
         vx: Random.float(-0.2, 0.2),
         vy: side * Random.float(0.1, 0.5),
         radius: Random.float(1, 3),
-        color: new Color(280, 50, 70, 0.5),
+        h: 280, s: 50, l: 70, a: 0.5,
         lifespan: Random.float(1000, 2500),
         fadeStart: 0.5,
       });
@@ -193,7 +203,10 @@ export class ParticleSystem {
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         radius: Random.float(2, 5),
-        color: colorA.lerp(colorB, t).withAlpha(0.9),
+        h: colorA.h + (colorB.h - colorA.h) * t,
+        s: colorA.s + (colorB.s - colorA.s) * t,
+        l: colorA.l + (colorB.l - colorA.l) * t,
+        a: 0.9,
         lifespan: Random.float(600, 1600),
         fadeStart: 0.6,
         gravity: 0.002,
@@ -209,7 +222,10 @@ export class ParticleSystem {
       vx: Random.float(-0.15, 0.15),
       vy: -Random.float(0.18, 0.45),
       radius: Random.float(1.5, 3.2),
-      color: color.withAlpha(0.65).withLightness(85),
+      h: color.h,
+      s: color.s,
+      l: 85,
+      a: 0.65,
       lifespan: Random.float(1600, 2800),
       fadeStart: 0.6,
       gravity: -0.001,
@@ -228,7 +244,10 @@ export class ParticleSystem {
       vx: -Math.cos(angle) * 0.8 + Math.cos(tangent) * 0.4,
       vy: -Math.sin(angle) * 0.8 + Math.sin(tangent) * 0.4,
       radius: Random.float(1.2, 2.5),
-      color: new Color(Random.float(40, 55), 90, 80, 0.8),
+      h: Random.float(40, 55),
+      s: 90,
+      l: 80,
+      a: 0.8,
       lifespan: Random.float(400, 800),
       fadeStart: 0.5,
     });
@@ -245,7 +264,10 @@ export class ParticleSystem {
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         radius: Random.float(1.8, 3.5),
-        color: new Color(Random.float(45, 60), 95, 75, 0.9),
+        h: Random.float(45, 60),
+        s: 95,
+        l: 75,
+        a: 0.9,
         lifespan: Random.float(600, 1200),
         fadeStart: 0.6,
       });
@@ -260,7 +282,10 @@ export class ParticleSystem {
       vx: Random.float(-0.2, 0.2),
       vy: dirY * Random.float(0.2, 0.55),
       radius: Random.float(1.0, 2.2),
-      color: new Color(dirY < 0 ? Random.float(50, 75) : Random.float(260, 290), 80, 80, 0.7),
+      h: dirY < 0 ? Random.float(50, 75) : Random.float(260, 290),
+      s: 80,
+      l: 80,
+      a: 0.7,
       lifespan: Random.float(1500, 3000),
       fadeStart: 0.5,
       gravity: dirY * -0.0008,

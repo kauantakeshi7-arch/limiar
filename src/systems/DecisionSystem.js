@@ -19,6 +19,16 @@ import { globalBus, Events } from '../core/EventEmitter.js';
 export class DecisionSystem {
   constructor() {
     this._diaryCooldowns = new Map();
+    this._sensesScratch = {
+      closestOpposite: null,
+      closestOppositeDist: Infinity,
+      closestThreat: null,
+      closestThreatDist: Infinity,
+      closestDisturbance: null,
+      closestDisturbanceDist: Infinity,
+      nectarTarget: null,
+      distToThreshold: 0,
+    };
   }
 
   /**
@@ -166,94 +176,102 @@ export class DecisionSystem {
     // Threshold membrane proximity
     const distToThreshold = Math.abs(py - threshold.y);
 
-    return {
-      closestOpposite,
-      closestOppositeDist,
-      closestThreat,
-      closestThreatDist,
-      closestDisturbance,
-      closestDisturbanceDist,
-      nectarTarget,
-      distToThreshold,
-    };
+    const s = this._sensesScratch;
+    s.closestOpposite = closestOpposite;
+    s.closestOppositeDist = closestOppositeDist;
+    s.closestThreat = closestThreat;
+    s.closestThreatDist = closestThreatDist;
+    s.closestDisturbance = closestDisturbance;
+    s.closestDisturbanceDist = closestDisturbanceDist;
+    s.nectarTarget = nectarTarget;
+    s.distToThreshold = distToThreshold;
+    return s;
   }
 
   // ── Utility AI Evaluation ─────────────────────────────────────────────────
 
   _evaluateUtility(creature, senses, now) {
-    const scores = {
-      flee:   0,
-      forage: 0,
-      court:  0,
-      play:   0,
-      rest:   0,
-      cruise: 0.22, // baseline contentment
-    };
+    let scoreCruise = 0.22; // baseline contentment
+    let scoreFlee   = 0;
+    let scoreForage = 0;
+    let scoreCourt  = 0;
+    let scorePlay   = 0;
+    let scoreRest   = 0;
 
     // 1. Flee Utility: fear + threat proximity + membrane caution
     if (senses.closestThreat) {
       const proximity = 1 - (senses.closestThreatDist / 190);
-      scores.flee += proximity * 0.9 + creature.fear * 0.6;
+      scoreFlee += proximity * 0.9 + creature.fear * 0.6;
     }
     // If creature has membrane caution and is getting close to the boundary
     if (creature.membraneCaution > 0.2 && senses.distToThreshold < 75) {
-      scores.flee += creature.membraneCaution * 0.85;
+      scoreFlee += creature.membraneCaution * 0.85;
     }
 
     // 2. Forage Utility: hunger drive + visible nectar or memory of favorite water
     const hunger = 1 - creature.energy;
     if (senses.nectarTarget) {
-      scores.forage = hunger * 1.4 + 0.55;
+      scoreForage = hunger * 1.4 + 0.55;
     } else if (creature.favoriteCoord && hunger > 0.45) {
       const d = Math.hypot(creature.favoriteCoord.x - creature.position.x, creature.favoriteCoord.y - creature.position.y);
       if (d < 30) {
         creature.favoriteCoord = null; // Arrived at past memory, nothing remains
       } else {
-        scores.forage = hunger * 0.65;
+        scoreForage = hunger * 0.65;
       }
     }
 
     // 3. Court Utility: sociability + partner proximity near threshold
     if (senses.closestOpposite && senses.distToThreshold < 95 && !creature.isDancing) {
       const partnerProximity = 1 - (senses.closestOppositeDist / 190);
-      scores.court = creature.sociability * 0.8 + partnerProximity * 0.7;
+      scoreCourt = creature.sociability * 0.8 + partnerProximity * 0.7;
     }
 
     // 4. Play with Player: curiosity drive + nearby touch ripple
     if (senses.closestDisturbance && creature.curiosity > 0.35 && creature.fear < 0.3) {
       const touchProximity = 1 - (senses.closestDisturbanceDist / 250);
-      scores.play = creature.curiosity * 0.9 + touchProximity * 0.6;
+      scorePlay = creature.curiosity * 0.9 + touchProximity * 0.6;
     }
 
     // 5. Rest Utility: fatigue + calm environment
-    if (creature.fatigue > 0.65 && scores.flee < 0.2 && !creature.isDancing) {
-      scores.rest = creature.fatigue * 1.1;
+    if (creature.fatigue > 0.65 && scoreFlee < 0.2 && !creature.isDancing) {
+      scoreRest = creature.fatigue * 1.1;
     }
 
     // Find highest utility decision (zero allocation scalar comparison)
     let bestDecision = 'cruise';
-    let highestScore = scores.cruise;
-    if (scores.flee > highestScore)   { highestScore = scores.flee;   bestDecision = 'flee';   }
-    if (scores.forage > highestScore) { highestScore = scores.forage; bestDecision = 'forage'; }
-    if (scores.court > highestScore)  { highestScore = scores.court;  bestDecision = 'court';  }
-    if (scores.play > highestScore)   { highestScore = scores.play;   bestDecision = 'play';   }
-    if (scores.rest > highestScore)   { highestScore = scores.rest;   bestDecision = 'rest';   }
+    let highestScore = scoreCruise;
+    if (scoreFlee > highestScore)   { highestScore = scoreFlee;   bestDecision = 'flee';   }
+    if (scoreForage > highestScore) { highestScore = scoreForage; bestDecision = 'forage'; }
+    if (scoreCourt > highestScore)  { highestScore = scoreCourt;  bestDecision = 'court';  }
+    if (scorePlay > highestScore)   { highestScore = scorePlay;   bestDecision = 'play';   }
+    if (scoreRest > highestScore)   { highestScore = scoreRest;   bestDecision = 'rest';   }
 
     // Assign decision and target
     creature.decision = bestDecision;
     switch (bestDecision) {
       case 'flee':
-        creature.decisionTarget = senses.closestThreat
-          ? { x: senses.closestThreat.position.x, y: senses.closestThreat.position.y }
-          : { x: creature.position.x, y: creature.originZone === Config.ZONE.LIGHT ? threshold.y * 0.35 : threshold.y + 120 };
+        if (senses.closestThreat) {
+          creature._decisionTargetScratch.x = senses.closestThreat.position.x;
+          creature._decisionTargetScratch.y = senses.closestThreat.position.y;
+          creature.decisionTarget = creature._decisionTargetScratch;
+        } else {
+          creature._decisionTargetScratch.x = creature.position.x;
+          creature._decisionTargetScratch.y = creature.originZone === Config.ZONE.LIGHT ? threshold.y * 0.35 : threshold.y + 120;
+          creature.decisionTarget = creature._decisionTargetScratch;
+        }
         creature.decisionLockMs = 1600; // calm commitment to retreat
         if (creature.isSleeping) creature.wake();
         break;
 
       case 'forage':
-        creature.decisionTarget = senses.nectarTarget
-          ? { x: senses.nectarTarget.x, y: senses.nectarTarget.y }
-          : creature.favoriteCoord;
+        if (senses.nectarTarget) {
+          creature.decisionTarget = senses.nectarTarget;
+        } else if (creature.favoriteCoord) {
+          creature.decisionTarget = creature.favoriteCoord;
+        } else {
+          creature.decisionTarget = null;
+        }
         creature.decisionLockMs = 1800; // committed forage drift
         if (creature.isSleeping) creature.wake();
         break;

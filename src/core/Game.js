@@ -160,7 +160,12 @@ export class Game {
       }
       this._ripples.length = rippleWriteIdx;
       if (this._ripples.length > 20) {
-        this._ripples.splice(0, this._ripples.length - 20);
+        const drop = this._ripples.length - 20;
+        const newLen = 20;
+        for (let i = 0; i < newLen; i++) {
+          this._ripples[i] = this._ripples[i + drop];
+        }
+        this._ripples.length = newLen;
       }
 
       this._renderer.render({

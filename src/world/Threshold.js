@@ -28,6 +28,14 @@ export class Threshold {
 
     /** Active harp wave impulses propagating across the membrane. */
     this.harpWaves       = [];
+    /** Fixed pre-allocated pool of 8 wave instances to eliminate GC churn on plucks. */
+    this._harpWavePool   = Array.from({ length: 8 }, () => ({
+      xRatio: 0,
+      intensity: 1.0,
+      radius: 0,
+      life: 0,
+      speed: 0.75,
+    }));
 
     /** Living bioluminescent flora anchored along the membrane. */
     const count = Config.ECOSYSTEM?.FLORA_COUNT || 24;
@@ -107,19 +115,23 @@ export class Threshold {
    * @param {number} [intensity=1.0]
    */
   addHarpImpulse(xRatio, intensity = 1.0) {
+    let hw;
     if (this.harpWaves.length >= 8) {
+      // Recycle the oldest element (index 0) in-place
+      hw = this.harpWaves[0];
       for (let i = 0; i < this.harpWaves.length - 1; i++) {
         this.harpWaves[i] = this.harpWaves[i + 1];
       }
-      this.harpWaves.length = 7;
+      this.harpWaves[this.harpWaves.length - 1] = hw;
+    } else {
+      hw = this._harpWavePool[this.harpWaves.length];
+      this.harpWaves.push(hw);
     }
-    this.harpWaves.push({
-      xRatio,
-      intensity,
-      radius: 0,
-      life: 1.0,
-      speed: 0.75, // px per ms
-    });
+    hw.xRatio    = xRatio;
+    hw.intensity = intensity;
+    hw.radius    = 0;
+    hw.life      = 1.0;
+    hw.speed     = 0.75; // px per ms
   }
 
   // ── Update ─────────────────────────────────────────────────────────────────
