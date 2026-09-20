@@ -319,5 +319,47 @@ export const Config = Object.freeze({
     MIN_DIST_FROM_THRESHOLD: 55,    // Min distance away from threshold membrane
   }),
 
+  // ── Generative Audio 2.0 & Soundscapes ────────────────────────────────────
+  AUDIO_EXPANDED: Object.freeze({
+    // Seasonal pentatonic scales for Light and Shadow biomes
+    SEASONAL_SCALES: Object.freeze({
+      // Maré de Cristal: Lydian mode (airy, luminous, ethereal, raised 4th / #11)
+      crystal_tide: Object.freeze({
+        LIGHT:  Object.freeze([261.63, 293.66, 329.63, 369.99, 392.00, 493.88, 523.25]), // C4, D4, E4, F#4, G4, B4, C5
+        SHADOW: Object.freeze([130.81, 146.83, 164.81, 185.00, 196.00, 246.94, 261.63]), // C3, D3, E3, F#3, G3, B3, C4
+      }),
+      // Noite Boreal: Dorian mode (mystic oceanic aurora, natural 6th)
+      boreal_night: Object.freeze({
+        LIGHT:  Object.freeze([293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 587.33]), // D4, E4, F4, G4, A4, B4, D5
+        SHADOW: Object.freeze([110.00, 123.47, 130.81, 146.83, 164.81, 196.00, 220.00]), // A2, B2, C3, D3, E3, G3, A3
+      }),
+      // Eclipse Dourado: Hirajoshi / Zen mode (warm twilight dusk, tranquil Japanese pentatonic)
+      golden_eclipse: Object.freeze({
+        LIGHT:  Object.freeze([293.66, 311.13, 392.00, 440.00, 466.16, 587.33, 622.25]), // D4, Eb4, G4, A4, Bb4, D5, Eb5
+        SHADOW: Object.freeze([73.42, 77.78, 98.00, 110.00, 116.54, 146.83, 155.56]),     // D2, Eb2, G2, A2, Bb2, D3, Eb3
+      }),
+    }),
+
+    // Coro Polifônico em Cardume (Swarm Choir)
+    SWARM_CHOIR: Object.freeze({
+      MIN_COUNT: 3,
+      RADIUS: 130,
+      RATIOS: Object.freeze([1.0, 1.25, 1.50, 1.75, 2.0, 2.25, 2.50]),
+      HARMONIC_RAMP_SEC: 0.8,
+      CHOIR_GAIN_BOOST: 1.25,
+      SCAN_INTERVAL_MS: 250,
+    }),
+
+    // Texturas Orgânicas Lofi & Sopro do Éter
+    LOFI: Object.freeze({
+      PINK_NOISE_GAIN: 0.009,
+      PINK_NOISE_FILTER_BASE: 480,
+      PINK_NOISE_FILTER_MOD: 180,
+      CRACKLE_INTERVAL_MIN_MS: 3000,
+      CRACKLE_INTERVAL_MAX_MS: 7000,
+      CRACKLE_GAIN: 0.004,
+    }),
+  }),
+
 });
 

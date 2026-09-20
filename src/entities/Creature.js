@@ -234,6 +234,20 @@ export class Creature {
     return 'Adulto';
   }
 
+  /**
+   * Fundamental frequency (Hz) for this creature tuned to its DNA luminosity and origin zone.
+   * @returns {number}
+   */
+  get soundFreq() {
+    const isLight = this.originZone === Config.ZONE.LIGHT;
+    const scales = Config.AUDIO_EXPANDED?.SEASONAL_SCALES?.crystal_tide;
+    const notes = isLight
+      ? (scales?.LIGHT || [261.63, 293.66, 329.63, 369.99, 392.00, 493.88, 523.25])
+      : (scales?.SHADOW || [130.81, 146.83, 164.81, 185.00, 196.00, 246.94, 261.63]);
+    const idx = Math.min(notes.length - 1, Math.floor(this.dna.luminosity * notes.length));
+    return notes[idx] + (this.dna.rhythm || 0) * 4;
+  }
+
   /** Temporarily express a conscious thought in the empathy card. */
   expressThought(text, duration = 3500) {
     this.customThought = text;

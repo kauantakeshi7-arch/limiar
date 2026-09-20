@@ -1,3 +1,5 @@
+import { Config } from '../core/Config.js';
+
 /**
  * AudioEngine — Generative ambient sound using the Web Audio API.
  *
@@ -13,13 +15,13 @@ export class AudioEngine {
     this._shadowLayer  = null;
     this._reverb       = null;
     this._initialized  = false;
-    /** Map<creatureId, { osc, gain }> */
+    /** Map<creatureId, { osc, gain, filter, panner, baseFreq, currentRatio, targetFreq, lastYRatio }> */
     this._creatureNodes = new Map();
 
     this.isMuted      = false;
     this._targetVolume = 0.55;
 
-    // Pentatonic scale frequencies (Hz) in two octaves
+    // Default pentatonic scale frequencies (Hz)
     this._lightNotes  = [261.6, 293.7, 329.6, 392.0, 440.0, 523.3, 587.3]; // C major pent
     this._shadowNotes = [138.6, 155.6, 185.0, 207.7, 233.1, 277.2, 311.1]; // C minor pent (lower)
 
@@ -32,6 +34,18 @@ export class AudioEngine {
     this._cachedDancingCount  = 0;
     this._lastFilterCutoff    = -1;
     this._lastFilterQ         = -1;
+
+    // ── Phase 3: Cosmic Seasons, Swarm Choir & Lofi Cosmic Bath ─────────────
+    this._currentSeasonType   = 'crystal_tide';
+    this._lastSeasonCheckTime = -1000;
+    this._lastSwarmScanTime   = -1000;
+
+    // Sopro do Éter (Pink Noise Buffer) & Micro-Estalos Estelares
+    this._pinkNoiseSource     = null;
+    this._pinkNoiseFilter     = null;
+    this._pinkNoiseGain       = null;
+    this._lastNoiseFilterUpdate = -1000;
+    this._nextStarCrackleTime = 3000 + Math.random() * 4000;
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -63,6 +77,9 @@ export class AudioEngine {
 
       this._initialized = true;
 
+      // Sopro do Éter: pink noise cosmic bed
+      this._initPinkNoiseLayer();
+
       // Fade in gently if unmuted
       if (!this.isMuted) {
         this._masterGain.gain.linearRampToValueAtTime(this._targetVolume, this._ctx.currentTime + 3);
@@ -83,6 +100,12 @@ export class AudioEngine {
       const target = this.isMuted ? 0.0001 : this._targetVolume;
       this._masterGain.gain.cancelScheduledValues(now);
       this._masterGain.gain.linearRampToValueAtTime(target, now + 0.3);
+
+      if (this._pinkNoiseGain) {
+        const noiseTarget = this.isMuted ? 0.0001 : (Config.AUDIO_EXPANDED?.LOFI?.PINK_NOISE_GAIN || 0.009);
+        this._pinkNoiseGain.gain.cancelScheduledValues(now);
+        this._pinkNoiseGain.gain.linearRampToValueAtTime(noiseTarget, now + 0.3);
+      }
     }
     return this.isMuted;
   }
@@ -156,6 +179,49 @@ export class AudioEngine {
     if (Math.abs(targetQ - this._lastFilterQ) > 0.02) {
       this._breathFilter.Q.setTargetAtTime(targetQ, audioTime, 0.2);
       this._lastFilterQ = targetQ;
+    }
+
+    // ── Phase 3: Seasonal Scale Portamento ──────────────────────────────────
+    const seasonType = season?.current || 'crystal_tide';
+    const seasonChanged = seasonType !== this._currentSeasonType;
+    if (seasonChanged || now - this._lastSeasonCheckTime >= 1000) {
+      this._lastSeasonCheckTime = now;
+      this._currentSeasonType = seasonType;
+      if (seasonChanged && this._creatureNodes.size > 0 && creatures && creatures.length > 0) {
+        for (let i = 0; i < creatures.length; i++) {
+          const c = creatures[i];
+          const node = this._creatureNodes.get(c.id);
+          if (node && c.isAlive) {
+            node.baseFreq = this.getCreatureBaseFreq(c, seasonType);
+            const target = node.baseFreq * (node.currentRatio || 1.0);
+            node.targetFreq = target;
+            node.osc.frequency.setTargetAtTime(target, audioTime, 1.2);
+          }
+        }
+      }
+    }
+
+    // ── Phase 3: Coro Polifônico em Cardume (Swarm Choir) ───────────────────
+    if (now - this._lastSwarmScanTime >= 250) {
+      this._lastSwarmScanTime = now;
+      this._updateSwarmChoir(creatures, audioTime);
+    }
+
+    // ── Phase 3: Sopro do Éter (Pink Noise Breathing) ───────────────────────
+    if (this._pinkNoiseFilter && now - this._lastNoiseFilterUpdate >= 200) {
+      this._lastNoiseFilterUpdate = now;
+      const baseNoise = Config.AUDIO_EXPANDED?.LOFI?.PINK_NOISE_FILTER_BASE || 480;
+      const modNoise = Config.AUDIO_EXPANDED?.LOFI?.PINK_NOISE_FILTER_MOD || 180;
+      const noiseFreq = baseNoise + Math.sin(now * 0.00032) * modNoise;
+      this._pinkNoiseFilter.frequency.setTargetAtTime(noiseFreq, audioTime, 0.2);
+    }
+
+    // ── Phase 3: Micro-Estalos Estelares (Star Crackles) ───────────────────
+    if (now >= this._nextStarCrackleTime) {
+      const minInterval = Config.AUDIO_EXPANDED?.LOFI?.CRACKLE_INTERVAL_MIN_MS || 3000;
+      const maxInterval = Config.AUDIO_EXPANDED?.LOFI?.CRACKLE_INTERVAL_MAX_MS || 7000;
+      this._nextStarCrackleTime = now + minInterval + Math.random() * (maxInterval - minInterval);
+      this._playStarCrackle();
     }
   }
 
@@ -506,11 +572,55 @@ export class AudioEngine {
 
   dispose() {
     if (!this._initialized) return;
-    this._ctx.close();
+    if (this._pinkNoiseSource) {
+      try {
+        this._pinkNoiseSource.stop();
+        this._pinkNoiseSource.disconnect();
+      } catch (_) {}
+      this._pinkNoiseSource = null;
+    }
+    if (this._pinkNoiseFilter) {
+      try { this._pinkNoiseFilter.disconnect(); } catch (_) {}
+      this._pinkNoiseFilter = null;
+    }
+    if (this._pinkNoiseGain) {
+      try { this._pinkNoiseGain.disconnect(); } catch (_) {}
+      this._pinkNoiseGain = null;
+    }
+    for (const [, node] of this._creatureNodes) {
+      try {
+        node.osc?.stop?.();
+        node.osc?.disconnect?.();
+        node.gain?.disconnect?.();
+        node.filter?.disconnect?.();
+        node.panner?.disconnect?.();
+      } catch (_) {}
+    }
+    this._creatureNodes.clear();
+    try {
+      this._ctx.close();
+    } catch (_) {}
     this._initialized = false;
   }
 
   // ── Creature tones ────────────────────────────────────────────────────────
+
+  /**
+   * Calculate base frequency for a creature based on seasonal scale and DNA luminosity.
+   * @param {import('../entities/Creature.js').Creature} creature
+   * @param {string} [seasonType=this._currentSeasonType]
+   * @returns {number}
+   */
+  getCreatureBaseFreq(creature, seasonType = this._currentSeasonType) {
+    const scales = Config.AUDIO_EXPANDED?.SEASONAL_SCALES?.[seasonType]
+      || Config.AUDIO_EXPANDED?.SEASONAL_SCALES?.crystal_tide;
+    const isLight = creature.originZone === 'light';
+    const notes = isLight
+      ? (scales?.LIGHT || this._lightNotes)
+      : (scales?.SHADOW || this._shadowNotes);
+    const index = Math.min(notes.length - 1, Math.floor(creature.dna.luminosity * notes.length));
+    return notes[index] + (creature.dna.rhythm || 0) * 4;
+  }
 
   /**
    * Add a soft, DNA-tuned oscillator for a creature with dedicated 3D binaural
@@ -520,9 +630,7 @@ export class AudioEngine {
   addCreature(creature) {
     if (!this._initialized) return;
 
-    const notes  = creature.originZone === 'light' ? this._lightNotes : this._shadowNotes;
-    const index  = Math.floor(creature.dna.luminosity * (notes.length - 1));
-    const freq   = notes[index];
+    const baseFreq = this.getCreatureBaseFreq(creature, this._currentSeasonType);
 
     const osc  = this._ctx.createOscillator();
     const gain = this._makeGain(0);
@@ -530,7 +638,7 @@ export class AudioEngine {
     const panner = this._makePanner(creature.position.x / 1200);
 
     osc.type = creature.originZone === 'light' ? 'sine' : 'triangle';
-    osc.frequency.value = freq + creature.dna.rhythm * 4; // slight detune by rhythm
+    osc.frequency.value = baseFreq;
     osc.connect(gain);
     gain.connect(filter);
     filter.connect(panner);
@@ -539,7 +647,16 @@ export class AudioEngine {
     osc.start();
     gain.gain.linearRampToValueAtTime(0.018, this._ctx.currentTime + 2);
 
-    this._creatureNodes.set(creature.id, { osc, gain, filter, panner });
+    this._creatureNodes.set(creature.id, {
+      osc,
+      gain,
+      filter,
+      panner,
+      baseFreq,
+      currentRatio: 1.0,
+      targetFreq: baseFreq,
+      lastYRatio: undefined,
+    });
   }
 
   /**
@@ -890,6 +1007,203 @@ export class AudioEngine {
     osc.start();
     gain.gain.linearRampToValueAtTime(0, this._ctx.currentTime + duration);
     osc.stop(this._ctx.currentTime + duration + 0.05);
+    this._cleanupOnEnded(osc, gain, filter, panner);
+  }
+
+  // ── Phase 3: Swarm Choir & Lofi Cosmic Bath ───────────────────────────────
+
+  /**
+   * Updates swarm choir harmonies when 3 or more creatures flock together within proximity.
+   * Assigns harmonic chord ratios to create rich choral polyphony instead of unison beating.
+   * @param {Array<import('../entities/Creature.js').Creature>} creatures
+   * @param {number} audioTime
+   */
+  _updateSwarmChoir(creatures, audioTime) {
+    if (!this._initialized || this.isMuted || !creatures) return;
+    const swarmRadiusSq = (Config.AUDIO_EXPANDED?.SWARM_CHOIR?.RADIUS || 130) ** 2;
+    const minCount = Config.AUDIO_EXPANDED?.SWARM_CHOIR?.MIN_COUNT || 3;
+    const ratios = Config.AUDIO_EXPANDED?.SWARM_CHOIR?.RATIOS || [1.0, 1.25, 1.5, 1.75, 2.0];
+    const rampSec = Config.AUDIO_EXPANDED?.SWARM_CHOIR?.HARMONIC_RAMP_SEC || 0.8;
+    const gainBoost = Config.AUDIO_EXPANDED?.SWARM_CHOIR?.CHOIR_GAIN_BOOST || 1.25;
+
+    const alive = [];
+    for (let i = 0; i < creatures.length; i++) {
+      const c = creatures[i];
+      if (c && c.isAlive && this._creatureNodes.has(c.id)) {
+        alive.push(c);
+      }
+    }
+
+    if (alive.length < minCount) {
+      // Reset any active swarm ratios to 1.0 (fundamental)
+      for (let i = 0; i < alive.length; i++) {
+        const node = this._creatureNodes.get(alive[i].id);
+        if (node && node.currentRatio !== 1.0) {
+          node.currentRatio = 1.0;
+          node.targetFreq = node.baseFreq;
+          node.osc.frequency.setTargetAtTime(node.baseFreq, audioTime, rampSec);
+          node.gain.gain.setTargetAtTime(0.018, audioTime, 0.4);
+        }
+      }
+      return;
+    }
+
+    const visited = new Set();
+
+    for (let i = 0; i < alive.length; i++) {
+      const root = alive[i];
+      if (visited.has(root.id)) continue;
+
+      // BFS to find connected flock/cluster
+      const cluster = [root];
+      visited.add(root.id);
+      let queueIdx = 0;
+
+      while (queueIdx < cluster.length) {
+        const curr = cluster[queueIdx++];
+        for (let j = 0; j < alive.length; j++) {
+          const candidate = alive[j];
+          if (!visited.has(candidate.id)) {
+            const dx = candidate.position.x - curr.position.x;
+            const dy = candidate.position.y - curr.position.y;
+            if (dx * dx + dy * dy <= swarmRadiusSq) {
+              visited.add(candidate.id);
+              cluster.push(candidate);
+            }
+          }
+        }
+      }
+
+      if (cluster.length >= minCount) {
+        // Deterministic sort by X position to avoid voice hopping
+        cluster.sort((a, b) => a.position.x - b.position.x);
+        for (let k = 0; k < cluster.length; k++) {
+          const c = cluster[k];
+          const node = this._creatureNodes.get(c.id);
+          if (!node) continue;
+          const assignedRatio = ratios[k % ratios.length];
+          if (Math.abs(node.currentRatio - assignedRatio) > 0.001) {
+            node.currentRatio = assignedRatio;
+            const target = node.baseFreq * assignedRatio;
+            node.targetFreq = target;
+            node.osc.frequency.setTargetAtTime(target, audioTime, rampSec);
+            node.gain.gain.setTargetAtTime(0.018 * gainBoost, audioTime, 0.4);
+          }
+        }
+      } else {
+        // Cluster is smaller than minCount, restore fundamental (1.0)
+        for (let k = 0; k < cluster.length; k++) {
+          const c = cluster[k];
+          const node = this._creatureNodes.get(c.id);
+          if (node && node.currentRatio !== 1.0) {
+            node.currentRatio = 1.0;
+            node.targetFreq = node.baseFreq;
+            node.osc.frequency.setTargetAtTime(node.baseFreq, audioTime, rampSec);
+            node.gain.gain.setTargetAtTime(0.018, audioTime, 0.4);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Generate an ultra-pure, zero-click stereo pink noise buffer using Paul Kellet's filter.
+   * @param {number} [durationSeconds=4.0]
+   * @returns {AudioBuffer}
+   */
+  _makePinkNoiseBuffer(durationSeconds = 4.0) {
+    const sampleRate = this._ctx?.sampleRate || 44100;
+    const length = Math.floor(sampleRate * durationSeconds);
+    const buffer = this._ctx.createBuffer(2, length, sampleRate);
+    for (let channel = 0; channel < 2; channel++) {
+      const data = buffer.getChannelData(channel);
+      let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+      for (let i = 0; i < length; i++) {
+        const white = Math.random() * 2 - 1;
+        b0 = 0.99886 * b0 + white * 0.0555179;
+        b1 = 0.99332 * b1 + white * 0.0750759;
+        b2 = 0.96900 * b2 + white * 0.1538520;
+        b3 = 0.86650 * b3 + white * 0.3104856;
+        b4 = 0.55000 * b4 + white * 0.5329522;
+        b5 = -0.7616 * b5 - white * 0.0168980;
+        data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.08;
+        b6 = white * 0.115926;
+      }
+    }
+    return buffer;
+  }
+
+  /**
+   * Initializes looping Sopro do Éter (Pink Noise) atmospheric bed.
+   */
+  _initPinkNoiseLayer() {
+    if (!this._ctx || typeof this._ctx.createBufferSource !== 'function' || typeof this._ctx.createBuffer !== 'function') return;
+    try {
+      const buffer = this._makePinkNoiseBuffer(4.0);
+      const source = this._ctx.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true;
+
+      const filter = this._ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = Config.AUDIO_EXPANDED?.LOFI?.PINK_NOISE_FILTER_BASE || 480;
+      filter.Q.value = 1.4;
+
+      const gain = this._makeGain(this.isMuted ? 0.0001 : (Config.AUDIO_EXPANDED?.LOFI?.PINK_NOISE_GAIN || 0.009));
+
+      source.connect(filter);
+      filter.connect(gain);
+      gain.connect(this._masterGain);
+
+      source.start();
+      this._pinkNoiseSource = source;
+      this._pinkNoiseFilter = filter;
+      this._pinkNoiseGain   = gain;
+    } catch (e) {
+      console.warn('[AudioEngine] Pink noise initialization skipped:', e);
+    }
+  }
+
+  /**
+   * Public / internal method to trigger a subtle analog cosmic dust crackle.
+   * @param {number} [xRatio=Math.random()]
+   */
+  playStarCrackle(xRatio = Math.random()) {
+    this._playStarCrackle(xRatio);
+  }
+
+  /**
+   * Synthesize a microscopic vintage star crackle (1-2 ms highpass click).
+   * @param {number} [xRatio=Math.random()]
+   */
+  _playStarCrackle(xRatio = Math.random()) {
+    if (!this._initialized || this.isMuted || !this._ctx) return;
+    const audioTime = this._ctx.currentTime;
+    const osc = this._ctx.createOscillator();
+    const gain = this._makeGain(0.0001);
+    const filter = this._ctx.createBiquadFilter();
+    const panner = this._makePanner(xRatio);
+
+    filter.type = 'bandpass';
+    filter.frequency.value = 3200 + Math.random() * 1600;
+    filter.Q.value = 3.5;
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(3600 + Math.random() * 800, audioTime);
+    osc.frequency.exponentialRampToValueAtTime(1200, audioTime + 0.009);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(panner);
+    panner.connect(this._masterGain);
+
+    const crackleGain = Config.AUDIO_EXPANDED?.LOFI?.CRACKLE_GAIN || 0.004;
+    osc.start(audioTime);
+    gain.gain.setValueAtTime(0.0001, audioTime);
+    gain.gain.linearRampToValueAtTime(crackleGain, audioTime + 0.001);
+    gain.gain.exponentialRampToValueAtTime(0.00001, audioTime + 0.012);
+    osc.stop(audioTime + 0.014);
+
     this._cleanupOnEnded(osc, gain, filter, panner);
   }
 }

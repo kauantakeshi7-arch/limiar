@@ -70,7 +70,7 @@ export class DecisionSystem {
 
       // ── 3. Utility Evaluation ─────────────────────────────────────────────
       const prevDecision = c.decision;
-      this._evaluateUtility(c, senses, now);
+      this._evaluateUtility(c, senses, now, threshold);
 
       // Notify player and diary on meaningful conscious decisions
       if (c.decision !== prevDecision && c.decision !== 'cruise') {
@@ -185,12 +185,13 @@ export class DecisionSystem {
     s.closestDisturbanceDist = closestDisturbanceDist;
     s.nectarTarget = nectarTarget;
     s.distToThreshold = distToThreshold;
+    s.thresholdY = threshold?.y ?? 400;
     return s;
   }
 
   // ── Utility AI Evaluation ─────────────────────────────────────────────────
 
-  _evaluateUtility(creature, senses, now) {
+  _evaluateUtility(creature, senses, now, threshold = null) {
     let scoreCruise = 0.22; // baseline contentment
     let scoreFlee   = 0;
     let scoreForage = 0;
@@ -256,8 +257,9 @@ export class DecisionSystem {
           creature._decisionTargetScratch.y = senses.closestThreat.position.y;
           creature.decisionTarget = creature._decisionTargetScratch;
         } else {
+          const threshY = threshold?.y ?? senses.thresholdY ?? 400;
           creature._decisionTargetScratch.x = creature.position.x;
-          creature._decisionTargetScratch.y = creature.originZone === Config.ZONE.LIGHT ? threshold.y * 0.35 : threshold.y + 120;
+          creature._decisionTargetScratch.y = creature.originZone === Config.ZONE.LIGHT ? threshY * 0.35 : threshY + 120;
           creature.decisionTarget = creature._decisionTargetScratch;
         }
         creature.decisionLockMs = 1600; // calm commitment to retreat
