@@ -230,7 +230,11 @@ export class Renderer {
    */
   registerEcho(creature) {
     if (this._echoes.length >= 32) {
-      this._echoes.shift();
+      // Overwrite oldest without array re-indexing
+      for (let i = 0; i < this._echoes.length - 1; i++) {
+        this._echoes[i] = this._echoes[i + 1];
+      }
+      this._echoes.length = 31;
     }
     this._echoes.push({
       x:      creature.position.x,
@@ -329,7 +333,8 @@ export class Renderer {
 
       // ── Threshold Tension ─────────────────────────────────────────────────
       let tension = 0;
-      for (const c of creatures) {
+      for (let i = 0; i < creatures.length; i++) {
+        const c = creatures[i];
         if (!c.isAlive) continue;
         const distY = Math.abs(c.position.y - ty);
         if (distY < 95) {
@@ -1044,7 +1049,8 @@ export class Renderer {
 
   _drawHarpWaves(ctx, harpWaves, w, ty) {
     ctx.save();
-    for (const hw of harpWaves) {
+    for (let i = 0; i < harpWaves.length; i++) {
+      const hw = harpWaves[i];
       const cx = hw.xRatio * w;
       const r = Math.max(1, hw.radius);
       const alpha = Math.max(0, hw.life * (hw.intensity || 1));
@@ -1055,9 +1061,12 @@ export class Renderer {
       ctx.ellipse(cx, ty, r, Math.max(1, r * 0.42), 0, 0, Math.PI * 2);
       ctx.strokeStyle = `rgba(225, 205, 255, ${alpha * 0.55})`;
       ctx.lineWidth = Math.max(0.5, 2.2 * hw.life);
-      ctx.shadowColor = 'rgba(200, 160, 255, 0.9)';
-      ctx.shadowBlur = 10;
+      if (!this._isMobile) {
+        ctx.shadowColor = 'rgba(200, 160, 255, 0.9)';
+        ctx.shadowBlur = 10;
+      }
       ctx.stroke();
+      if (!this._isMobile) ctx.shadowBlur = 0;
 
       // Inner golden resonance ring
       if (r > 12) {
@@ -1074,9 +1083,12 @@ export class Renderer {
         ctx.beginPath();
         ctx.arc(cx, ty, Math.max(1, 4 * coreAlpha), 0, Math.PI * 2);
         ctx.fillStyle = `rgba(255, 250, 220, ${coreAlpha * 0.9})`;
-        ctx.shadowColor = 'rgba(255, 240, 180, 1)';
-        ctx.shadowBlur = 12;
+        if (!this._isMobile) {
+          ctx.shadowColor = 'rgba(255, 240, 180, 1)';
+          ctx.shadowBlur = 12;
+        }
         ctx.fill();
+        if (!this._isMobile) ctx.shadowBlur = 0;
       }
     }
     ctx.restore();
@@ -1087,7 +1099,8 @@ export class Renderer {
     const n = points.length - 1;
 
     ctx.save();
-    for (const reed of flora) {
+    for (let rIdx = 0; rIdx < flora.length; rIdx++) {
+      const reed = flora[rIdx];
       // Find point along membrane path
       const idxF = Math.max(0, Math.min(n, reed.u * n));
       const i0 = Math.floor(idxF);
@@ -1391,9 +1404,12 @@ export class Renderer {
       ctx.arc(echo.x, echo.y, r, 0, Math.PI * 2);
       ctx.strokeStyle = echo.hsla;
       ctx.lineWidth   = 1;
-      ctx.shadowColor = echo.hsla;
-      ctx.shadowBlur  = 12;
+      if (!this._isMobile) {
+        ctx.shadowColor = echo.hsla;
+        ctx.shadowBlur  = 12;
+      }
       ctx.stroke();
+      if (!this._isMobile) ctx.shadowBlur = 0;
 
       // Ghost cross
       const size = echo.radius * 0.4 * echo.life;
@@ -2097,36 +2113,37 @@ export class Renderer {
     ctx.translate(px, py);
     ctx.rotate(angle);
 
-    const eyeForward = r * 0.42;
-    const eyeSpread  = r * 0.32;
-    const eyeR       = Math.max(1.2, r * 0.12);
+    const eyeForward   = r * 0.42;
+    const eyeSpread    = r * 0.32;
+    const eyeR         = Math.max(1.2, r * 0.12);
+    const lookY        = lookOffset * r * 0.2;
+    const eyeY1        = -eyeSpread + lookY;
+    const eyeY2        =  eyeSpread + lookY;
 
-    // Left and Right Ocelli
-    const eyes = [
-      { x: eyeForward, y: -eyeSpread + lookOffset * r * 0.2 },
-      { x: eyeForward, y:  eyeSpread + lookOffset * r * 0.2 },
-    ];
+    const isLight      = creature.originZone === Config.ZONE.LIGHT;
+    const socketColor  = isLight ? 'rgba(255, 255, 230, 0.95)' : 'rgba(230, 210, 255, 0.95)';
+    const pupilColor   = isLight ? 'rgba(120, 60, 10, 0.8)'   : 'rgba(50, 10, 80, 0.8)';
+    const pupilOffsetX = eyeR * 0.35;
+    const pupilR       = eyeR * 0.45;
 
-    for (const e of eyes) {
-      // Glow socket
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, eyeR, 0, Math.PI * 2);
-      ctx.fillStyle = creature.originZone === Config.ZONE.LIGHT
-        ? 'rgba(255, 255, 230, 0.95)'
-        : 'rgba(230, 210, 255, 0.95)';
-      ctx.shadowColor = ctx.fillStyle;
+    // Sockets (left and right)
+    ctx.beginPath();
+    ctx.arc(eyeForward, eyeY1, eyeR, 0, Math.PI * 2);
+    ctx.arc(eyeForward, eyeY2, eyeR, 0, Math.PI * 2);
+    ctx.fillStyle = socketColor;
+    if (!this._isMobile) {
+      ctx.shadowColor = socketColor;
       ctx.shadowBlur = 6;
-      ctx.fill();
-
-      // Pupil point
-      ctx.beginPath();
-      ctx.arc(e.x + eyeR * 0.35, e.y, eyeR * 0.45, 0, Math.PI * 2);
-      ctx.fillStyle = creature.originZone === Config.ZONE.LIGHT
-        ? 'rgba(120, 60, 10, 0.8)'
-        : 'rgba(50, 10, 80, 0.8)';
-      ctx.shadowBlur = 0;
-      ctx.fill();
     }
+    ctx.fill();
+    if (!this._isMobile) ctx.shadowBlur = 0;
+
+    // Pupils (left and right)
+    ctx.beginPath();
+    ctx.arc(eyeForward + pupilOffsetX, eyeY1, pupilR, 0, Math.PI * 2);
+    ctx.arc(eyeForward + pupilOffsetX, eyeY2, pupilR, 0, Math.PI * 2);
+    ctx.fillStyle = pupilColor;
+    ctx.fill();
 
     ctx.restore();
   }
@@ -2255,7 +2272,8 @@ export class Renderer {
 
   _drawRipples(ctx, ripples, now) {
     ctx.save();
-    for (const ripple of ripples) {
+    for (let i = 0; i < ripples.length; i++) {
+      const ripple   = ripples[i];
       const age      = now - ripple.startTime;
       const duration = 1800;
       if (age > duration) continue;
@@ -2269,20 +2287,26 @@ export class Renderer {
       ctx.arc(ripple.x, ripple.y, radius, 0, Math.PI * 2);
       ctx.strokeStyle = `rgba(210, 170, 255, ${alpha})`;
       ctx.lineWidth   = Math.max(0.5, 1.5 * (1 - t));
-      ctx.shadowColor = 'rgba(190, 140, 255, 0.6)';
-      ctx.shadowBlur  = 12;
+      if (!this._isMobile) {
+        ctx.shadowColor = 'rgba(190, 140, 255, 0.6)';
+        ctx.shadowBlur  = 12;
+      }
       ctx.stroke();
+      if (!this._isMobile) ctx.shadowBlur = 0;
 
       // Inner secondary ring (half radius, half phase)
       if (t < 0.6) {
-        const t2    = t / 0.6;
+        const t2     = t / 0.6;
         const alpha2 = (1 - t2) * (1 - t2) * 0.3;
         ctx.beginPath();
         ctx.arc(ripple.x, ripple.y, Math.max(0.5, t2 * 40), 0, Math.PI * 2);
         ctx.strokeStyle = `rgba(230, 195, 255, ${alpha2})`;
         ctx.lineWidth   = Math.max(0.5, 1 * (1 - t2));
-        ctx.shadowBlur  = 8;
+        if (!this._isMobile) {
+          ctx.shadowBlur  = 8;
+        }
         ctx.stroke();
+        if (!this._isMobile) ctx.shadowBlur = 0;
       }
     }
     ctx.restore();
@@ -2589,9 +2613,12 @@ export class Renderer {
     ctx.arc(ix, iy, ir, 0, Math.PI * 2);
     ctx.strokeStyle = `rgba(255, 255, 255, ${0.45 + pulse * 0.35})`;
     ctx.lineWidth = 1.4;
-    ctx.shadowColor = 'rgba(255, 255, 255, 0.85)';
-    ctx.shadowBlur = 12;
+    if (!this._isMobile) {
+      ctx.shadowColor = 'rgba(255, 255, 255, 0.85)';
+      ctx.shadowBlur = 12;
+    }
     ctx.stroke();
+    if (!this._isMobile) ctx.shadowBlur = 0;
 
     // Outer rotating celestial reticle
     ctx.beginPath();
@@ -2634,8 +2661,10 @@ export class Renderer {
         ctx.fillStyle = creature.color.toHSLAWithAlpha(0.22);
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
         ctx.lineWidth = 0.9;
-        ctx.shadowColor = creature.color.toHSLA();
-        ctx.shadowBlur = 8;
+        if (!this._isMobile) {
+          ctx.shadowColor = creature.color.toHSLA();
+          ctx.shadowBlur = 8;
+        }
 
         // Left twin wing
         ctx.beginPath();
@@ -2665,10 +2694,13 @@ export class Renderer {
         ctx.arc(px, py, hr, 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(253, 224, 71, 0.55)';
         ctx.lineWidth = 1.2;
-        ctx.shadowColor = 'rgba(250, 204, 21, 0.85)';
-        ctx.shadowBlur = 10;
+        if (!this._isMobile) {
+          ctx.shadowColor = 'rgba(250, 204, 21, 0.85)';
+          ctx.shadowBlur = 10;
+        }
         ctx.setLineDash([6, 6]);
         ctx.stroke();
+        if (!this._isMobile) ctx.shadowBlur = 0;
 
         // 4 orbiting starlight diamonds
         for (let i = 0; i < 4; i++) {
@@ -2689,8 +2721,10 @@ export class Renderer {
         ctx.save();
         ctx.strokeStyle = `rgba(56, 189, 248, ${0.45 + veinPulse * 0.4})`;
         ctx.lineWidth = 1.0;
-        ctx.shadowColor = '#06b6d4';
-        ctx.shadowBlur = 8;
+        if (!this._isMobile) {
+          ctx.shadowColor = '#06b6d4';
+          ctx.shadowBlur = 8;
+        }
         for (let i = 0; i < 4; i++) {
           const va = (i * Math.PI * 2) / 4 + creature.pulsePhase;
           ctx.beginPath();
@@ -2725,8 +2759,10 @@ export class Renderer {
             ty + Math.sin(tailAngle) * length
           );
           ctx.strokeStyle = colors[i];
-          ctx.shadowColor = colors[i];
-          ctx.shadowBlur = 6;
+          if (!this._isMobile) {
+            ctx.shadowColor = colors[i];
+            ctx.shadowBlur = 6;
+          }
           ctx.stroke();
         }
         ctx.restore();
@@ -2753,15 +2789,19 @@ export class Renderer {
     ctx.beginPath();
     ctx.arc(m1x, m1y, 2.5, 0, Math.PI * 2);
     ctx.fillStyle = '#fef08a';
-    ctx.shadowColor = '#facc15';
-    ctx.shadowBlur = 7;
+    if (!this._isMobile) {
+      ctx.shadowColor = '#facc15';
+      ctx.shadowBlur = 7;
+    }
     ctx.fill();
 
     ctx.beginPath();
     ctx.arc(m2x, m2y, 2.5, 0, Math.PI * 2);
     ctx.fillStyle = '#c084fc';
-    ctx.shadowColor = '#9333ea';
-    ctx.shadowBlur = 7;
+    if (!this._isMobile) {
+      ctx.shadowColor = '#9333ea';
+      ctx.shadowBlur = 7;
+    }
     ctx.fill();
 
     ctx.restore();
@@ -2791,8 +2831,10 @@ export class Renderer {
       ctx.fill();
 
       ctx.fillStyle = '#fffdf0';
-      ctx.shadowColor = s.color.toHSLA();
-      ctx.shadowBlur = 6;
+      if (!this._isMobile) {
+        ctx.shadowColor = s.color.toHSLA();
+        ctx.shadowBlur = 6;
+      }
       ctx.beginPath();
       ctx.arc(s.x, s.y, Math.max(1, r * 0.45), 0, Math.PI * 2);
       ctx.fill();
@@ -2819,9 +2861,12 @@ export class Renderer {
         ctx.arc(c.x, c.y, waveR, 0, Math.PI * 2);
         ctx.strokeStyle = `rgba(254, 240, 138, ${waveAlpha})`;
         ctx.lineWidth = 1.4 - rOff * 0.3;
-        ctx.shadowColor = 'rgba(253, 224, 71, 0.8)';
-        ctx.shadowBlur = 10;
+        if (!this._isMobile) {
+          ctx.shadowColor = 'rgba(253, 224, 71, 0.8)';
+          ctx.shadowBlur = 10;
+        }
         ctx.stroke();
+        if (!this._isMobile) ctx.shadowBlur = 0;
       }
     }
     ctx.restore();

@@ -348,13 +348,13 @@ export class EvolutionSystem {
           c.state === CreatureState.SYMBIOTIC    ||
           c.state === CreatureState.DISSOLVING) continue;
 
-      c.age += dt;
+      // Note: c.age is already advanced 1:1 in Creature.updateKinematics(dt)
 
       // Enter decline at 85% of lifespan
       if (!c.isAging && c.age > c.maxAge * 0.85) {
         c.isAging = true;
         // Emit a soft signal — a few slow particles drifting upward
-        particles.emitTransformBurst(c.position.x, c.position.y, c.color.withAlpha(0.3));
+        particles.emitTransformBurst(c.position.x, c.position.y, c.color);
         c.expressThought(`${c.name} contempla serenamente seus últimos ciclos vitais.`);
       }
 

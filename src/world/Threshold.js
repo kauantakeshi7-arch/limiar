@@ -45,6 +45,7 @@ export class Threshold {
         sporeTimer: Math.random() * 4000,
       };
     });
+    this._releasedFloraScratch = [];
   }
 
   // ── Accessors ──────────────────────────────────────────────────────────────
@@ -106,6 +107,12 @@ export class Threshold {
    * @param {number} [intensity=1.0]
    */
   addHarpImpulse(xRatio, intensity = 1.0) {
+    if (this.harpWaves.length >= 8) {
+      for (let i = 0; i < this.harpWaves.length - 1; i++) {
+        this.harpWaves[i] = this.harpWaves[i + 1];
+      }
+      this.harpWaves.length = 7;
+    }
     this.harpWaves.push({
       xRatio,
       intensity,
@@ -113,7 +120,6 @@ export class Threshold {
       life: 1.0,
       speed: 0.75, // px per ms
     });
-    if (this.harpWaves.length > 8) this.harpWaves.shift();
   }
 
   // ── Update ─────────────────────────────────────────────────────────────────
@@ -199,9 +205,10 @@ export class Threshold {
    * @returns {Array<{x:number, y:number, side:number}>}
    */
   brushFlora(px, py, canvasWidth) {
-    if (Math.abs(py - this._currentY) > 52) return [];
+    const released = this._releasedFloraScratch;
+    released.length = 0;
+    if (Math.abs(py - this._currentY) > 52) return released;
 
-    const released = [];
     for (let i = 0; i < this.flora.length; i++) {
       const reed = this.flora[i];
       const rx = reed.u * canvasWidth;

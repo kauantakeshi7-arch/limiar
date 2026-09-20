@@ -104,6 +104,9 @@ export class Creature {
     this.glowIntensity     = 0;
     /** Cooldown timer (ms) before this creature can echo another light wave. */
     this.lightEchoCooldown = 0;
+    this.pendingLightWaveTimer = 0;
+    this.pendingLightWaveIntensity = 0;
+    this.pendingLightWaveGen = 0;
 
     // ── Biomes & Atmospheric Nuances ─────────────────────────────────────────
     /** Intensity [0..1] of celestial silver dust shimmer from Aurora Nursery. */
@@ -430,6 +433,24 @@ export class Creature {
    * @param {number} [intensity=1.0]
    * @param {number} [generation=0]
    */
+  /**
+   * Queue a delayed light wave propagation synchronized with simulation delta dt.
+   */
+  queueLightWave(delayMs, intensity, generation) {
+    if (this.pendingLightWaveTimer <= 0 || delayMs < this.pendingLightWaveTimer) {
+      this.pendingLightWaveTimer = delayMs;
+      this.pendingLightWaveIntensity = intensity;
+      this.pendingLightWaveGen = generation;
+    }
+  }
+
+  /**
+   * Emit a gentle bioluminescent wave that travels through nearby creatures.
+   * Designed to be soothing, calm and hypnotic with quick exponential decay.
+   * @param {Creature[]} [allCreatures]
+   * @param {number} [intensity=1.0]
+   * @param {number} [generation=0]
+   */
   emitLightWave(allCreatures = [], intensity = 1.0, generation = 0) {
     if (this.glowIntensity < intensity) {
       this.glowIntensity = intensity;
@@ -453,13 +474,9 @@ export class Creature {
 
       const d = Math.hypot(other.position.x - px, other.position.y - py);
       if (d < radius && d > 4) {
-        // Organic biological delay: 120ms to 240ms proportional to distance
+        // Organic biological delay proportional to distance (synchronous with sim clock)
         const delay = 120 + (d / radius) * 120;
-        setTimeout(() => {
-          if (other.isAlive && other.lightEchoCooldown <= 0) {
-            other.emitLightWave(allCreatures, nextIntensity, generation + 1);
-          }
-        }, delay);
+        other.queueLightWave(delay, nextIntensity, generation + 1);
       }
     }
   }
@@ -492,6 +509,18 @@ export class Creature {
     this.age += dt;
     if (this.lightEchoCooldown > 0) this.lightEchoCooldown = Math.max(0, this.lightEchoCooldown - dt);
     if (this.glowIntensity > 0) this.glowIntensity = Math.max(0, this.glowIntensity - dt * 0.00085);
+
+    // Synchronous quorum sensing propagation
+    if (this.pendingLightWaveTimer > 0) {
+      this.pendingLightWaveTimer -= dt;
+      if (this.pendingLightWaveTimer <= 0) {
+        this.pendingLightWaveTimer = 0;
+        if (this.isAlive && this.lightEchoCooldown <= 0) {
+          this.emitLightWave(allCreatures, this.pendingLightWaveIntensity, this.pendingLightWaveGen);
+        }
+      }
+    }
+
     if (this.auroraShimmer > 0) {
       this.auroraShimmer = Math.max(0, this.auroraShimmer - dt * 0.00008);
       this.auroraTrailTimer += dt;

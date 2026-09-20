@@ -46,16 +46,14 @@ export class EventEmitter {
 
   /**
    * Emit an event, invoking all subscribers with the given payload.
+   * Zero heap allocations during dispatch.
    * @param {string} event
    * @param {...*} args
    */
   emit(event, ...args) {
     const handlers = this._listeners.get(event);
-    if (!handlers) return;
-    // Snapshot to a new array first — handlers may remove themselves mid-iteration.
-    for (const handler of [...handlers]) {
-      handler(...args);
-    }
+    if (!handlers || handlers.size === 0) return;
+    handlers.forEach(handler => handler(...args));
   }
 
   /** Remove all listeners for a given event (or all events if omitted). */

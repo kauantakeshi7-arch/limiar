@@ -853,7 +853,8 @@ export class World {
         const bubble = vent.bubbles[b];
         bubble.life -= dt * 0.00014;
         if (bubble.life <= 0 || bubble.y < this._height * 0.60) {
-          vent.bubbles.splice(b, 1);
+          const last = vent.bubbles.pop();
+          if (b < vent.bubbles.length) vent.bubbles[b] = last;
           continue;
         }
         bubble.y -= bubble.vy * (dt / 16.67);
@@ -924,7 +925,8 @@ export class World {
       const dust = this.aurora.shimmerDust[d];
       dust.life -= dt * 0.0012;
       if (dust.life <= 0) {
-        this.aurora.shimmerDust.splice(d, 1);
+        const last = this.aurora.shimmerDust.pop();
+        if (d < this.aurora.shimmerDust.length) this.aurora.shimmerDust[d] = last;
         continue;
       }
       dust.x += dust.vx * (dt / 16.67);
@@ -938,7 +940,8 @@ export class World {
       const spore = this.activeSpores[i];
       spore.life -= dt / spore.maxLife;
       if (spore.life <= 0) {
-        this.activeSpores.splice(i, 1);
+        const last = this.activeSpores.pop();
+        if (i < this.activeSpores.length) this.activeSpores[i] = last;
         continue;
       }
       spore.x += (spore.vx + this.wind.x * 0.5) * (dt / 16.67);
@@ -946,7 +949,8 @@ export class World {
 
       // Boundaries clamp
       if (spore.x < 0 || spore.x > this._width || spore.y < 0 || spore.y > this._height) {
-        this.activeSpores.splice(i, 1);
+        const last = this.activeSpores.pop();
+        if (i < this.activeSpores.length) this.activeSpores[i] = last;
         continue;
       }
 
@@ -959,7 +963,8 @@ export class World {
           c.energy = Math.min(1.0, c.energy + spore.nutrition);
           c.experiencePeace(0.12);
           this.particles.emitDreamMote(spore.x, spore.y, spore.color);
-          this.activeSpores.splice(i, 1);
+          const last = this.activeSpores.pop();
+          if (i < this.activeSpores.length) this.activeSpores[i] = last;
           break;
         }
       }
@@ -973,7 +978,8 @@ export class World {
       call.life -= call.decay * dt;
       call.radius += ((call.maxRadius - call.radius) * 0.045) * (dt / 16.67);
       if (call.life <= 0) {
-        this.playerCalls.splice(i, 1);
+        const last = this.playerCalls.pop();
+        if (i < this.playerCalls.length) this.playerCalls[i] = last;
       }
     }
   }

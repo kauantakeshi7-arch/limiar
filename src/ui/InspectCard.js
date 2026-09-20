@@ -10,6 +10,25 @@ export class InspectCard {
     this._currentCreature = null;
     this._isOpen = false;
     this._lastUpdate = 0;
+    this._lastBadgesHtml = '';
+
+    this._nameEl = this._container?.querySelector?.('.inspect-name') || null;
+    this._badgeEl = this._container?.querySelector?.('.inspect-badge') || null;
+    this._thoughtEl = this._container?.querySelector?.('.inspect-thought') || null;
+    this._legendaryEl = this._container?.querySelector?.('.inspect-legendary') || null;
+
+    this._meters = {};
+    if (this._container?.querySelector) {
+      const meterNames = ['vitality', 'calm', 'social', 'curiosity', 'vigor'];
+      for (let i = 0; i < meterNames.length; i++) {
+        const name = meterNames[i];
+        this._meters[name] = {
+          fill: this._container.querySelector(`.meter-${name} .meter-fill`),
+          val: this._container.querySelector(`.meter-${name} .meter-val`),
+          lastPct: -1,
+        };
+      }
+    }
 
     this._bindEvents();
   }
@@ -38,6 +57,9 @@ export class InspectCard {
 
     this._currentCreature = creature;
     this._isOpen = true;
+    this._lastBadgesHtml = '';
+    this._resetMeterCaches();
+
     if (this._container) {
       this._container.classList.add('visible');
     }
@@ -47,8 +69,17 @@ export class InspectCard {
   close() {
     this._currentCreature = null;
     this._isOpen = false;
+    this._lastBadgesHtml = '';
+    this._resetMeterCaches();
+
     if (this._container) {
       this._container.classList.remove('visible');
+    }
+  }
+
+  _resetMeterCaches() {
+    for (const key in this._meters) {
+      this._meters[key].lastPct = -1;
     }
   }
 
@@ -79,40 +110,40 @@ export class InspectCard {
     const genRomans = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
     const romanGen = genRomans[Math.min(9, (c.generation || 1) - 1)] || c.generation;
 
-    // Header info
-    const nameEl = this._container.querySelector('.inspect-name');
-    const badgeEl = this._container.querySelector('.inspect-badge');
-    const thoughtEl = this._container.querySelector('.inspect-thought');
-    const legendaryEl = this._container.querySelector('.inspect-legendary');
-
-    if (nameEl) nameEl.textContent = c.name;
-    if (badgeEl) {
+    // Header info (cached DOM references)
+    if (this._nameEl) this._nameEl.textContent = c.name;
+    if (this._badgeEl) {
       const zoneName = c.originZone === 'light' ? 'Luz' : 'Sombra';
-      badgeEl.textContent = `${c.bodyPlanLabel} • Geração ${romanGen} (${zoneName})`;
+      this._badgeEl.textContent = `${c.bodyPlanLabel} • Geração ${romanGen} (${zoneName})`;
     }
 
-    if (thoughtEl) {
-      thoughtEl.textContent = `« ${c.getStatusText()} »`;
+    if (this._thoughtEl) {
+      this._thoughtEl.textContent = `« ${c.getStatusText()} »`;
     }
 
     // Legendary & Chimera indicators
-    if (legendaryEl) {
-      const badges = [];
+    if (this._legendaryEl) {
+      let badgesStr = '';
       if (c.legendaryName) {
-        badges.push(`<span class="tag-legendary">🌟 ${c.legendaryName}</span>`);
+        badgesStr += `<span class="tag-legendary">🌟 ${c.legendaryName}</span>`;
       }
       if (c.isChimera) {
-        badges.push(`<span class="tag-chimera">☯️ Quimera Simbiótica</span>`);
+        if (badgesStr) badgesStr += ' ';
+        badgesStr += `<span class="tag-chimera">☯️ Quimera Simbiótica</span>`;
       }
-      if (badges.length > 0) {
-        legendaryEl.innerHTML = badges.join(' ');
-        legendaryEl.style.display = 'block';
-      } else {
-        legendaryEl.style.display = 'none';
+
+      if (badgesStr !== this._lastBadgesHtml) {
+        this._lastBadgesHtml = badgesStr;
+        if (badgesStr) {
+          this._legendaryEl.innerHTML = badgesStr;
+          this._legendaryEl.style.display = 'block';
+        } else {
+          this._legendaryEl.style.display = 'none';
+        }
       }
     }
 
-    // Drive Progress Bars
+    // Drive Progress Bars (diffed)
     this._setMeter('vitality', c.energy);
     this._setMeter('calm', 1.0 - c.fear);
     this._setMeter('social', c.sociability);
@@ -121,11 +152,14 @@ export class InspectCard {
   }
 
   _setMeter(name, value) {
-    const bar = this._container.querySelector(`.meter-${name} .meter-fill`);
-    const valText = this._container.querySelector(`.meter-${name} .meter-val`);
+    const m = this._meters[name];
+    if (!m) return;
     const clamped = Math.max(0, Math.min(1, value));
     const pct = Math.round(clamped * 100);
-    if (bar) bar.style.width = `${pct}%`;
-    if (valText) valText.textContent = `${pct}%`;
+    if (pct === m.lastPct) return;
+    m.lastPct = pct;
+
+    if (m.fill) m.fill.style.width = `${pct}%`;
+    if (m.val) m.val.textContent = `${pct}%`;
   }
 }

@@ -104,6 +104,19 @@ export class PhysicsSystem {
           a.position.y -= ny * overlap;
           b.position.x += nx * overlap;
           b.position.y += ny * overlap;
+
+          // Dissipate approaching relative velocity along contact normal to eliminate elastic vibration
+          const rvx = b.velocity.x - a.velocity.x;
+          const rvy = b.velocity.y - a.velocity.y;
+          const relVel = rvx * nx + rvy * ny;
+          if (relVel < 0) {
+            const restitution = 0.25; // serene organic restitution
+            const impulse = relVel * (1 + restitution) * 0.5;
+            a.velocity.x += nx * impulse;
+            a.velocity.y += ny * impulse;
+            b.velocity.x -= nx * impulse;
+            b.velocity.y -= ny * impulse;
+          }
         }
       }
     }
@@ -724,9 +737,10 @@ export class PhysicsSystem {
       const steer = this._computeSteering(creature, creatures, threshold, wind, touchPoints, activeNectar, now, tide, reefs, vents, season);
       this._integrate(creature, { x: steer.x * 0.5, y: steer.y * 0.5 }, dt, season);
 
-      const offset = Vector2.fromAngle((now || Date.now()) * 0.001, creature.radius * 2.2);
-      partner.position.x = creature.position.x + offset.x;
-      partner.position.y = creature.position.y + offset.y;
+      const angle = (now || Date.now()) * 0.001;
+      const dist = creature.radius * 2.2;
+      partner.position.x = creature.position.x + Math.cos(angle) * dist;
+      partner.position.y = creature.position.y + Math.sin(angle) * dist;
       partner.velocity.x = creature.velocity.x;
       partner.velocity.y = creature.velocity.y;
     }

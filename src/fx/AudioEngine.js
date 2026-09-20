@@ -208,9 +208,9 @@ export class AudioEngine {
     gain.gain.setValueAtTime(0.038, now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.6);
 
-    setTimeout(() => {
-      try { osc.stop(); osc2.stop(); } catch (_) {}
-    }, 1700);
+    osc.stop(now + 1.65);
+    osc2.stop(now + 1.65);
+    this._cleanupOnEnded(osc, osc2, gain, filter, panner);
   }
 
   /**
@@ -223,7 +223,9 @@ export class AudioEngine {
     if (!this._initialized || this.isMuted) return;
     const now = this._ctx.currentTime;
     const baseFreq = 523.25;
-    [baseFreq, baseFreq * 1.5, baseFreq * 2].forEach((freq, i) => {
+    const freqs = [baseFreq, baseFreq * 1.5, baseFreq * 2];
+    for (let i = 0; i < freqs.length; i++) {
+      const freq = freqs[i];
       const t = now + i * 0.08;
       const osc = this._ctx.createOscillator();
       const gain = this._makeGain(0.022);
@@ -241,8 +243,9 @@ export class AudioEngine {
       osc.start(t);
       gain.gain.setValueAtTime(0.022, t);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.0);
-      setTimeout(() => { try { osc.stop(); } catch (_) {} }, (t - now + 1.1) * 1000);
-    });
+      osc.stop(t + 1.05);
+      this._cleanupOnEnded(osc, gain, filter, panner);
+    }
   }
 
   /**
@@ -257,8 +260,10 @@ export class AudioEngine {
     const root = 220;
     const panner = this._makePanner(xPos);
     const filter = this._makeDepthFilter(yPos);
+    const freqs = [root, root * 1.5, root * 2.25];
 
-    [root, root * 1.5, root * 2.25].forEach((freq, i) => {
+    for (let i = 0; i < freqs.length; i++) {
+      const freq = freqs[i];
       const osc = this._ctx.createOscillator();
       const gain = this._makeGain(0.016);
       osc.type = 'sine';
@@ -267,11 +272,13 @@ export class AudioEngine {
       gain.connect(filter);
       filter.connect(panner);
       panner.connect(this._reverb);
-      osc.start(now + i * 0.06);
-      gain.gain.setValueAtTime(0.016, now + i * 0.06);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.6);
-      setTimeout(() => { try { osc.stop(); } catch (_) {} }, 2800);
-    });
+      const t = now + i * 0.06;
+      osc.start(t);
+      gain.gain.setValueAtTime(0.016, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 2.6);
+      osc.stop(t + 2.65);
+      this._cleanupOnEnded(osc, gain, i === freqs.length - 1 ? filter : null, i === freqs.length - 1 ? panner : null);
+    }
   }
 
   /**
@@ -320,9 +327,8 @@ export class AudioEngine {
       gain.gain.linearRampToValueAtTime(p.gain, now + 0.35); // warm slow gong/bowl strike
       gain.gain.exponentialRampToValueAtTime(0.0001, now + p.decay);
 
-      setTimeout(() => {
-        try { osc.stop(); } catch (_) {}
-      }, (p.decay + 0.2) * 1000);
+      osc.stop(now + p.decay + 0.05);
+      this._cleanupOnEnded(osc, gain, i === partials.length - 1 ? filter : null, i === partials.length - 1 ? panner : null);
     }
   }
 
@@ -370,9 +376,9 @@ export class AudioEngine {
       gain.gain.linearRampToValueAtTime(0.015, t + 0.04);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
 
-      setTimeout(() => {
-        try { osc.stop(); osc2.stop(); } catch (_) {}
-      }, (i * 0.12 + 1.8) * 1000);
+      osc.stop(t + 1.65);
+      osc2.stop(t + 1.65);
+      this._cleanupOnEnded(osc, osc2, gain, i === count - 1 ? filter : null, i === count - 1 ? panner : null);
     }
   }
 
@@ -522,7 +528,8 @@ export class AudioEngine {
     osc.start(now);
     gain.gain.setValueAtTime(0.012, now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
-    setTimeout(() => { try { osc.stop(); } catch (_) {} }, 300);
+    osc.stop(now + 0.28);
+    this._cleanupOnEnded(osc, gain, filter, panner);
   }
 
   /**
@@ -538,7 +545,8 @@ export class AudioEngine {
     const panner = this._makePanner(xRatio);
     const filter = this._makeDepthFilter(yRatio);
 
-    freqs.forEach((freq, idx) => {
+    for (let idx = 0; idx < freqs.length; idx++) {
+      const freq = freqs[idx];
       const osc = this._ctx.createOscillator();
       const gain = this._makeGain(0.0001);
 
@@ -558,8 +566,9 @@ export class AudioEngine {
       gain.gain.linearRampToValueAtTime(0.024 / (idx + 1), startT + 0.4);
       gain.gain.exponentialRampToValueAtTime(0.0001, startT + 2.8);
 
-      setTimeout(() => { try { osc.stop(); } catch (_) {} }, (delay + 3.0) * 1000);
-    });
+      osc.stop(startT + 2.85);
+      this._cleanupOnEnded(osc, gain, idx === freqs.length - 1 ? filter : null, idx === freqs.length - 1 ? panner : null);
+    }
   }
 
   /**
@@ -595,10 +604,27 @@ export class AudioEngine {
     gain.gain.linearRampToValueAtTime(0.022, now + 0.08);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.7);
 
-    setTimeout(() => { try { osc.stop(); } catch (_) {} }, 750);
+    osc.stop(now + 0.72);
+    this._cleanupOnEnded(osc, gain, filter, panner);
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────
+
+  /**
+   * Automatically disconnect audio nodes when the primary oscillator ends,
+   * preventing graph accumulation leaks.
+   */
+  _cleanupOnEnded(mainOsc, ...nodes) {
+    if (!mainOsc) return;
+    mainOsc.onended = () => {
+      try {
+        mainOsc.disconnect();
+        for (let i = 0; i < nodes.length; i++) {
+          nodes[i]?.disconnect?.();
+        }
+      } catch (_) {}
+    };
+  }
 
   /**
    * Helper to construct a safe StereoPannerNode with crossfeed clamp.
@@ -741,6 +767,7 @@ export class AudioEngine {
     panner.connect(this._masterGain);
     osc.start();
     gain.gain.linearRampToValueAtTime(0, this._ctx.currentTime + duration);
-    setTimeout(() => { try { osc.stop(); } catch (_) {} }, duration * 1000 + 100);
+    osc.stop(this._ctx.currentTime + duration + 0.05);
+    this._cleanupOnEnded(osc, gain, filter, panner);
   }
 }
