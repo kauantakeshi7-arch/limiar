@@ -3,13 +3,16 @@
  * Suporte completo para PWA, instalação no celular e jogabilidade 100% offline.
  */
 
-const CACHE_NAME = 'limiar-cache-v3';
+const CACHE_NAME = 'limiar-cache-v4';
 
 const PRECACHE_ASSETS = [
   './',
   './index.html',
   './style.css',
   './manifest.json',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-maskable-512.png',
   './icons/icon-192.svg',
   './icons/icon-512.svg',
   './src/main.js',
@@ -43,11 +46,17 @@ const PRECACHE_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
-      // Use allSettled so one missing resource cannot abort the entire offline cache
       await Promise.allSettled(
-        PRECACHE_ASSETS.map((asset) =>
-          cache.add(asset).catch((err) => console.warn(`[SW] Precache warning for ${asset}:`, err))
-        )
+        PRECACHE_ASSETS.map(async (asset) => {
+          try {
+            const res = await fetch(asset, { cache: 'no-cache' });
+            if (res && (res.ok || res.status === 200)) {
+              await cache.put(asset, res);
+            }
+          } catch (err) {
+            console.warn(`[SW] Precache warning for ${asset}:`, err);
+          }
+        })
       );
     }).then(() => self.skipWaiting())
   );
@@ -73,44 +82,70 @@ self.addEventListener('fetch', (event) => {
   if (!url.protocol.startsWith('http')) return;
 
   // 1. Requisições de navegação (abrir o PWA, recarregar a página, clicar no ícone do celular):
-  // Tenta a rede, mas se a rede falhar (offline ou servidor local desligado),
-  // entrega IMEDIATAMENTE o index.html em cache para que o jogo NUNCA mostre tela de erro!
+  // Cache-First instantâneo com revalidação em background: abre em 0ms mesmo offline ou com sinal instável!
   if (event.request.mode === 'navigate') {
     event.respondWith(
       (async () => {
+        const cache = await caches.open(CACHE_NAME);
+
+        // Busca no cache primeiro (ignora query params como ?utm_source=homescreen)
+        const cached = (await cache.match(event.request, { ignoreSearch: true }))
+          || (await cache.match('./index.html', { ignoreSearch: true }))
+          || (await cache.match('./', { ignoreSearch: true }))
+          || (await cache.match('index.html', { ignoreSearch: true }))
+          || (await caches.match(event.request, { ignoreSearch: true }));
+
+        // Se já temos a página em cache, entrega imediatamente em 0ms
+        // e atualiza em background se a rede responder
+        if (cached) {
+          fetch(event.request)
+            .then(async (networkResponse) => {
+              if (networkResponse && networkResponse.ok && !networkResponse.redirected) {
+                await cache.put(event.request, networkResponse.clone());
+              }
+            })
+            .catch(() => {});
+          return cached;
+        }
+
+        // Se não tinha em cache (primeira visita), busca na rede
         try {
           const networkResponse = await fetch(event.request);
-          if (networkResponse && networkResponse.status === 200) {
-            const cache = await caches.open(CACHE_NAME);
-            cache.put(event.request, networkResponse.clone());
+          if (networkResponse && networkResponse.ok) {
+            if (!networkResponse.redirected) {
+              cache.put(event.request, networkResponse.clone()).catch(() => {});
+            }
             return networkResponse;
           }
         } catch (_) {
-          // Servidor local desligado ou sem conexão: usa cache offline
+          // Rede falhou e não tinha cache específico
         }
 
-        const cached = (await caches.match(event.request))
-          || (await caches.match('./index.html'))
-          || (await caches.match('index.html'))
-          || (await caches.match('./'));
+        // Fallback final: qualquer index.html em qualquer cache
+        const fallback = await caches.match('./index.html', { ignoreSearch: true })
+          || await caches.match('./', { ignoreSearch: true });
+        if (fallback) return fallback;
 
-        if (cached) return cached;
-        return new Response('Offline', { status: 503, statusText: 'Offline' });
+        return new Response('Offline', { status: 200, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
       })()
     );
     return;
   }
 
-  // 2. Recursos estáticos (scripts, estilos, ícones, áudio):
-  // Stale-While-Revalidate ultra-rápido: entrega o cache em 0ms se presente e atualiza em background
+  // 2. Recursos estáticos (scripts, estilos, ícones, fontes):
+  // Stale-While-Revalidate com ignoreSearch
   event.respondWith(
     (async () => {
-      const cachedResponse = await caches.match(event.request);
+      const cache = await caches.open(CACHE_NAME);
+      const cachedResponse = (await caches.match(event.request))
+        || (await cache.match(event.request, { ignoreSearch: true }));
+
       const networkPromise = fetch(event.request)
         .then(async (networkResponse) => {
-          if (networkResponse && networkResponse.status === 200 && (networkResponse.type === 'basic' || networkResponse.type === 'cors')) {
-            const cache = await caches.open(CACHE_NAME);
-            cache.put(event.request, networkResponse.clone());
+          if (networkResponse && networkResponse.ok && (networkResponse.type === 'basic' || networkResponse.type === 'cors')) {
+            if (!networkResponse.redirected) {
+              await cache.put(event.request, networkResponse.clone()).catch(() => {});
+            }
           }
           return networkResponse;
         })
@@ -123,7 +158,7 @@ self.addEventListener('fetch', (event) => {
       const networkRes = await networkPromise;
       if (networkRes) return networkRes;
 
-      return new Response('Offline', { status: 503, statusText: 'Offline' });
+      return new Response('', { status: 404, statusText: 'Not Found' });
     })()
   );
 });

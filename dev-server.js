@@ -24,8 +24,9 @@ const MIME_TYPES = {
 };
 
 const server = http.createServer((req, res) => {
-  // Default to index.html for root requests
-  const urlPath  = req.url === '/' ? '/index.html' : req.url;
+  // Strip query parameters
+  const cleanUrl = req.url.split('?')[0];
+  const urlPath  = (cleanUrl === '/' || cleanUrl === '') ? '/index.html' : cleanUrl;
   const filePath = path.join(__dirname, urlPath);
   const ext      = path.extname(filePath).toLowerCase();
   const mimeType = MIME_TYPES[ext] ?? 'application/octet-stream';
