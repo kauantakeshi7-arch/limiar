@@ -3,7 +3,7 @@
  * Suporte completo para PWA, instalação no celular e jogabilidade 100% offline.
  */
 
-const CACHE_NAME = 'limiar-cache-v2';
+const CACHE_NAME = 'limiar-cache-v3';
 
 const PRECACHE_ASSETS = [
   './',
@@ -42,8 +42,13 @@ const PRECACHE_ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_ASSETS);
+    caches.open(CACHE_NAME).then(async (cache) => {
+      // Use allSettled so one missing resource cannot abort the entire offline cache
+      await Promise.allSettled(
+        PRECACHE_ASSETS.map((asset) =>
+          cache.add(asset).catch((err) => console.warn(`[SW] Precache warning for ${asset}:`, err))
+        )
+      );
     }).then(() => self.skipWaiting())
   );
 });
@@ -67,40 +72,58 @@ self.addEventListener('fetch', (event) => {
   // Não intercepta esquemas não suportados como chrome-extension
   if (!url.protocol.startsWith('http')) return;
 
+  // 1. Requisições de navegação (abrir o PWA, recarregar a página, clicar no ícone do celular):
+  // Tenta a rede, mas se a rede falhar (offline ou servidor local desligado),
+  // entrega IMEDIATAMENTE o index.html em cache para que o jogo NUNCA mostre tela de erro!
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      (async () => {
+        try {
+          const networkResponse = await fetch(event.request);
+          if (networkResponse && networkResponse.status === 200) {
+            const cache = await caches.open(CACHE_NAME);
+            cache.put(event.request, networkResponse.clone());
+            return networkResponse;
+          }
+        } catch (_) {
+          // Servidor local desligado ou sem conexão: usa cache offline
+        }
+
+        const cached = (await caches.match(event.request))
+          || (await caches.match('./index.html'))
+          || (await caches.match('index.html'))
+          || (await caches.match('./'));
+
+        if (cached) return cached;
+        return new Response('Offline', { status: 503, statusText: 'Offline' });
+      })()
+    );
+    return;
+  }
+
+  // 2. Recursos estáticos (scripts, estilos, ícones, áudio):
+  // Stale-While-Revalidate ultra-rápido: entrega o cache em 0ms se presente e atualiza em background
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      // Revalidação em segundo plano (Stale-While-Revalidate)
-      const fetchPromise = fetch(event.request)
-        .then((networkResponse) => {
+    (async () => {
+      const cachedResponse = await caches.match(event.request);
+      const networkPromise = fetch(event.request)
+        .then(async (networkResponse) => {
           if (networkResponse && networkResponse.status === 200 && (networkResponse.type === 'basic' || networkResponse.type === 'cors')) {
-            const responseToCache = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseToCache);
-            });
+            const cache = await caches.open(CACHE_NAME);
+            cache.put(event.request, networkResponse.clone());
           }
           return networkResponse;
         })
-        .catch(() => {
-          // Erro de rede em background é silencioso se já houver cache
-          if (event.request.mode === 'navigate') {
-            return caches.match('./index.html');
-          }
-          return null;
-        });
+        .catch(() => null);
 
-      // Se temos o recurso em cache, entrega imediatamente (0ms latency, 100% offline-first)
       if (cachedResponse) {
         return cachedResponse;
       }
 
-      // Se não está no cache, aguarda a resposta da rede
-      return fetchPromise.then((networkResponse) => {
-        if (networkResponse) return networkResponse;
-        if (event.request.mode === 'navigate') {
-          return caches.match('./index.html');
-        }
-        return new Response('Offline', { status: 503, statusText: 'Offline' });
-      });
-    })
+      const networkRes = await networkPromise;
+      if (networkRes) return networkRes;
+
+      return new Response('Offline', { status: 503, statusText: 'Offline' });
+    })()
   );
 });
